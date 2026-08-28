@@ -1,8 +1,6 @@
 # DJU API
 
-## Second-year computer science project at ENSAI.
-
-### Presentation
+## Presentation
 
 The objective of this project is to develop an API capable of calculating Degree Days (DJU) from meteorological data.
 
@@ -23,7 +21,7 @@ The project includes the following main features:
 - take heating and cooling thresholds into account;
 - reuse certain intermediate results in order to avoid unnecessary calculations.
 
-### Data used
+## Data used
 
 The meteorological data used mainly come from the daily records of Météo France weather stations available on data.gouv.fr.
 
@@ -42,7 +40,7 @@ For territorial calculations, the project also requires information related to m
 - their altitude;
 - their population.
 
-### Temperature estimation
+## Temperature estimation
 
 To calculate DJU for a location that does not directly correspond to a weather station, the temperature must be estimated using several nearby stations.
 
@@ -52,7 +50,7 @@ Distances between geographical coordinates can be calculated using the Haversine
 
 A correction related to altitude can also be applied.
 
-### Architecture
+## Architecture
 
 The project is based on the ENSAI second-year computer science project template.
 
@@ -70,7 +68,7 @@ This organization makes it possible to separate:
 - business logic;
 - exposure of functionalities through the API.
 
-### Technologies
+## Technologies
 
 Technologies used or planned as part of the project:
 
@@ -81,7 +79,7 @@ Technologies used or planned as part of the project:
 
 This section will be completed progressively as the technical choices for the project are made.
 
-### Team 12
+## Team 12
 
 Project carried out as part of the second-year computer science project at ENSAI.
 
