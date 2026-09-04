@@ -1,72 +1,100 @@
- Diagramme de classes : API DJU 
+# Class diagram: DJU API
 
 ```mermaid
 classDiagram
-    class ZoneGeographique {
+    class GeographicZone {
       +int id
-      +string nom
-      +string typeZone
+      +string name
+      +string zone_type
+      +get_municipalities(): list[Municipality]
+      +contains_point(lat: float, lon: float): bool
     }
     class Region {
-      +string codeInsee
+      +string insee_code
+      +get_departments(): list[Department]
     }
-    class Departement {
-      +string codeInsee
+    class Department {
+      +string insee_code
+      +get_municipalities(): list[Municipality]
     }
-    class Commune {
-      +string codeInsee
-      +float latitude
-      +float longitude
-    }
-    class Zonage {
-      +date dateCreation
-      +string description
-    }
-    class Utilisateur {
-      +int id
-      +string email
-      +string motDePasseHash
-    }
-    class StationMeteo {
-      +string codeStation
+    class Municipality {
+      +string insee_code
       +float latitude
       +float longitude
       +float altitude
+      +int population
+      +distance_to(lat: float, lon: float): float
+      +get_nearby_stations(n: int): list[MeteoStation]
     }
-    class ReleveTemperature {
+    class Zoning {
+      +date created_at
+      +string description
+      +add_municipality(m: Municipality): None
+      +remove_municipality(m: Municipality): None
+      +get_municipalities(): list[Municipality]
+    }
+    class User {
+      +int id
+      +string username
+      +string password_hash
+      +check_password(password: string): bool
+      +create_zoning(description: string): Zoning
+      +get_calculations(): list[DjuCalculation]
+    }
+    class MeteoStation {
+      +string station_code
+      +string name
+      +float latitude
+      +float longitude
+      +float altitude
+      +distance_to(lat: float, lon: float): float
+      +get_reports(start: date, end: date): list[TemperatureReport]
+    }
+    class TemperatureReport {
       +date date
-      +float tempMin
-      +float tempMax
-      +float tempMoyenne
+      +float temp_min
+      +float temp_max
+      +float temp_mean
+      +daily_mean(): float
+      +apply_altitude_correction(delta_alt: float): TemperatureReport
     }
-    class TypeDJU {
-      +string nom
-      +float temperatureBase
+    class DjuType {
+      +string name
+      +float base_temperature
       +string mode
+      +compute_daily_value(t_min: float, t_max: float): float
+      +is_heating(): bool
+      +is_cooling(): bool
     }
-    class CalculDJU {
-      +date dateDebut
-      +date dateFin
-      +string periodicite
-      +date dateCalcul
+    class DjuCalculation {
+      +date start_date
+      +date end_date
+      +string time_step
+      +date computed_at
+      +float latitude
+      +float longitude
+      +run(): list[DjuResult]
+      +aggregate(time_step: string): list[DjuResult]
+      +can_reuse_intermediate(): bool
     }
-    class ResultatDJU {
-      +date periodeDebut
-      +date periodeFin
-      +float valeur
+    class DjuResult {
+      +date period_start
+      +date period_end
+      +float value
+      +merge(other: DjuResult): DjuResult
     }
-    ZoneGeographique <|-- Region
-    ZoneGeographique <|-- Departement
-    ZoneGeographique <|-- Commune
-    ZoneGeographique <|-- Zonage
-    Region "1" --> "*" Departement
-    Departement "1" --> "*" Commune
-    Utilisateur "1" --> "*" Zonage
-    Zonage "*" --> "*" Commune : contient
-    Commune "*" --> "*" StationMeteo : proche de
-    StationMeteo "1" --> "*" ReleveTemperature
-    CalculDJU "*" --> "1" TypeDJU
-    CalculDJU "*" --> "0..1" ZoneGeographique
-    CalculDJU "1" --> "*" ResultatDJU
-    Utilisateur "1" --> "*" CalculDJU
+    GeographicZone <|-- Region
+    GeographicZone <|-- Department
+    GeographicZone <|-- Municipality
+    GeographicZone <|-- Zoning
+    Region "1" --> "*" Department
+    Department "1" --> "*" Municipality
+    User "1" --> "*" Zoning
+    Zoning "*" --> "*" Municipality : contains
+    Municipality "*" --> "*" MeteoStation : nearby
+    MeteoStation "1" --> "*" TemperatureReport
+    DjuCalculation "*" --> "1" DjuType
+    DjuCalculation "*" --> "0..1" GeographicZone
+    DjuCalculation "1" --> "*" DjuResult
+    User "1" --> "*" DjuCalculation
 ```
