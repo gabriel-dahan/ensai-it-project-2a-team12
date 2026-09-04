@@ -154,3 +154,28 @@ for dept in departements:
         dict_meteo[dept] = filtrer_donnees_meteo(chemin)
     except FileNotFoundError:
         print(f"Fichier manquant pour le département {dept}")
+
+
+# vérification et suppression des valeurs manquantes 
+colonnes_essentielles = ["TMIN", "TMAX", "TMEAN", "TMED_TN_TX", "LAT", "LON", "ALTI"]
+
+for dept, df in dict_meteo.items():
+    colonnes_presentes = [c for c in colonnes_essentielles if c in df.columns]
+
+    nb_na_avant = df[colonnes_presentes].isnull().sum().sum()
+    if nb_na_avant > 0:
+        print(f"Département {dept} : {nb_na_avant} valeurs manquantes détectées")
+        print(df[colonnes_presentes].isnull().sum()[df[colonnes_presentes].isnull().sum() > 0])
+
+    dict_meteo[dept] = df.dropna(subset=colonnes_presentes)
+
+    nb_lignes_supprimees = len(df) - len(dict_meteo[dept])
+    if nb_lignes_supprimees > 0:
+        print(f"  -> {nb_lignes_supprimees} lignes supprimées pour le département {dept}\n")
+
+# Résumé global
+total_na_restant = sum(
+    df[[c for c in colonnes_essentielles if c in df.columns]].isnull().sum().sum()
+    for df in dict_meteo.values()
+)
+print(f"\nTotal de valeurs manquantes restantes (colonnes essentielles) : {total_na_restant}")
