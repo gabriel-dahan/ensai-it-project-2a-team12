@@ -36,7 +36,7 @@ classDiagram
     class User {
       +int id
       +string username
-      +string password_hash
+      -string password
       +check_password(password: string): bool
       +create_zoning(description: string): Zoning
       +get_calculations(): list[DjuCalculation]
