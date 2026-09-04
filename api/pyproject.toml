@@ -1,8 +1,8 @@
 [project]
-name = "project_name_back"
+name = "dju_api_12"
 version = "0.1.0"
 description = "API Template for the ENSAI 2nd year IT project"
-authors = [{ name = "Lastname Firstname" }, { name = "Author2" }]
+authors = [{ name = "Yousfi Aziz" }, { name = "Sterlin Eudes" }, { name = "Dahan Gabriel" }, { name = "Lassalle Gwenael" }, { name = "Feral Marceau" }]
 requires-python = ">=3.13"
 
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
     "requests",
     "regex",
     "uvicorn",
+    "bcrypt",
 ]
 
 # Dependencies used only for development, not for runtime
