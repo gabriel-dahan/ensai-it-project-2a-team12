@@ -56,8 +56,8 @@ The project is based on the ENSAI second-year computer science project template.
 
 The application follows a layered architecture:
 
-- business_object
-- dao
+- business_object : dju.py, geo_zone.py, meteo_station.py, temperature_report.py, user.py
+- dao : db_connection.py, dju_dao.py, geo_zone_dao.py, meteo_station.py, temperature_report_dao.py, user_dao.py
 - service
 - view
 
