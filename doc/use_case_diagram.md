@@ -1,21 +1,21 @@
 ```mermaid
 flowchart LR
   subgraph Users
-    Anonyme["Utilisateur anonyme"]
-    Authentifie["Utilisateur authentifié"]
-    Admin["Administrateur"]
+    Anonyme["Anonymous user"]
+    Authentifie["Authentified user"]
+    Admin["Administrator"]
   end
 
   Authentifie --> Anonyme
 
   subgraph API_DJU["API DJU"]
-    UC1(["Calculer un DJU ponctuel"])
-    UC2(["Calculer un DJU zonal"])
-    UC3(["Consulter zonages admin"])
-    UC4(["Créer un zonage personnalisé"])
-    UC5(["Gérer ses zonages"])
-    UC6(["Importer un zonage"])
-    UC7(["Alimenter les données sources"])
+    UC1(["Compute a ponctual DJU"])
+    UC2(["Compute a zone DJU"])
+    UC3(["Consult admin zoning"])
+    UC4(["Create a personalized zoning"])
+    UC5(["Manage zoning"])
+    UC6(["Import a zoning"])
+    UC7(["Link source data"])
   end
 
   Anonyme --> UC1
