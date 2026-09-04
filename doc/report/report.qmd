@@ -1,0 +1,123 @@
+---
+title: ""
+format:
+  pdf:
+    documentclass: report
+    header-includes: |
+      \usepackage{enumitem}
+      \setlist[itemize]{label=$\bullet$}
+      \usepackage[bottom]{footmisc}
+      \usepackage[dvipsnames]{xcolor}
+      \usepackage{booktabs}
+      
+      \definecolor{pale-red}{RGB}{211, 93, 93}
+      \definecolor{pale-blue}{RGB}{42, 77, 126}
+      
+      \usepackage{indentfirst}
+      \setlength{\parindent}{1.5em}
+      
+      \usepackage{titlesec}
+      
+      % Titres
+      \titleformat{\chapter}[hang]
+        {\normalfont\Large\bfseries\color{pale-red}}
+        {\thechapter} 
+        {0.8em} 
+        {}
+      \titlespacing*{\chapter}{0pt}{-20pt}{20pt} 
+      
+      % Sections
+      \titleformat{\section}
+        {\normalfont\large\bfseries\color{pale-blue}} 
+        {\thesection}
+        {1em}
+        {}
+        
+      %  Sous-sections
+      \titleformat{\subsection}
+        {\normalfont\normalsize\bfseries\color{gray}}
+        {\thesubsection}
+        {1em}
+        {}
+lang: fr
+fontsize: 11pt
+papersize: a4
+geometry: top=1.5cm, bottom=1.5cm, left=2.5cm, right=2.5cm
+
+link-citations: true
+colorlinks: true
+linkcolor: pale-blue
+urlcolor: pale-blue
+citecolor: pale-blue
+editor: visual
+
+execute: 
+  freeze: auto # Empêche l'execution systématique de toutes les computations à chaque rendu.
+
+# On n'affiche que les résultats voulus.
+echo: FALSE
+warning: FALSE
+message: FALSE
+---
+
+<!-- Partie document -->
+
+\begin{titlepage}
+\centering
+
+\begin{flushright}
+\tiny Campus de Ker Lann rue Blaise Pascal\\
+BP37203 35172 BRUZ CEDEX\\
+Tél : +33 (0) 2 99 05 32 32\\
+communication@ensai.fr\\
+www.ensai.fr\\
+\end{flushright}
+
+\includegraphics{resources/ensai_logo.png}\\
+\vspace{1.0cm}
+
+{\LARGE\textsc{Project Report}}\\
+
+\vspace{2.5cm}
+
+\rule{\textwidth}{0.5mm}\\
+\vspace{0.8cm}
+
+\begin{flushleft}
+\emph{Theme :}\\
+\textbf{DJU ...}\\
+\end{flushleft}
+
+\vspace{0.8cm}
+\rule{\textwidth}{0.5mm}\\
+
+\vspace{2.5cm}
+
+\begin{flushleft}
+\emph{Collaborators :}\\
+\textbf{Aziz Yousfi}\\
+\textbf{Eudes Sterlin}\\
+\textbf{Gabriel Dahan}\\
+\textbf{Gwenael Lassalle}\\
+\textbf{Marceau Feral}
+\end{flushleft}
+
+\begin{flushright}
+\emph{Tutor :}\\
+\textbf{Thierry Mathé}\\
+\end{flushright}
+
+\vfill 
+\begin{center}
+ENSAI\\
+2026--2027
+\end{center}
+\end{titlepage}
+
+\tableofcontents
+
+# 1 \| ...
+
+## 1.1. ...
+
+...
