@@ -2,9 +2,7 @@ import os
 import pandas as pd
 import requests
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
+
 DOSSIER_DESTINATION = (
     "/home/onyxia/work/ensai-it-project-2a-team12/data/raw_data"
 )
@@ -119,9 +117,7 @@ CIBLES_METEO = {
     "99": "https://www.data.gouv.fr/api/1/datasets/r/ee873c76-cc9f-4fd0-a752-f9d2283a5d0f",
 }
 
-# ==========================================
-# FONCTION DE FILTRAGE
-# ==========================================
+
 
 
 def filtrer_donnees_meteo(chemin_gz):
@@ -161,9 +157,7 @@ def filtrer_donnees_meteo(chemin_gz):
     return df
 
 
-# ==========================================
-# EXÉCUTION : TÉLÉCHARGEMENT, FILTRAGE ET NETTOYAGE
-# ==========================================
+
 os.makedirs(DOSSIER_DESTINATION, exist_ok=True)
 dict_meteo = {}
 
@@ -178,12 +172,12 @@ for dept, url in CIBLES_METEO.items():
     if response.status_code == 200:
         chemin_gz = os.path.join(DOSSIER_DESTINATION, f"dep_{dept}.csv.gz")
 
-        # 1. Sauvegarde temporaire du fichier compressé unique
+  
         with open(chemin_gz, "wb") as f:
             f.write(response.content)
 
         try:
-            # 2. Lecture, filtrage direct en DataFrame et stockage dans le dictionnaire
+
             dict_meteo[dept] = filtrer_donnees_meteo(chemin_gz)
             print(
                 f"Département {dept} chargé, filtré et stocké dans dict_meteo."
@@ -191,7 +185,7 @@ for dept, url in CIBLES_METEO.items():
         except Exception as e:
             print(f"Erreur lors du traitement du département {dept}: {e}")
         finally:
-            # 3. Suppression immédiate du fichier sur le disque pour libérer l'espace
+
             if os.path.exists(chemin_gz):
                 os.remove(chemin_gz)
                 print(f"Fichier temporaire du département {dept} supprimé.")
