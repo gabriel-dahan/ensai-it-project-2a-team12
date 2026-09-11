@@ -1,179 +1,173 @@
-"""Create database tables and load open-data into PostgreSQL."""
-
-from __future__ import annotations
-
 import os
-from pathlib import Path
-
 import pandas as pd
-import psycopg2
-from dotenv import load_dotenv
-from psycopg2 import sql
-from psycopg2.extras import execute_values
+import requests
 
-from communes import fetch_communes
-from meteo_stations import fetch_meteo_data
+DOSSIER_DESTINATION = (
+    "/home/onyxia/work/ensai-it-project-2a-team12/data/raw_data"
+)
 
-DATA_DIR = Path(__file__).resolve().parent
-ROOT_DIR = DATA_DIR.parent
-SQL_FILE = DATA_DIR / "init_db.sql"
-
-COMMUNE_INSERT = """
-    INSERT INTO communes (
-        nom, code_postal, code_departement, code_region,
-        longitude, latitude, altitude
-    ) VALUES %s
-"""
-
-METEO_INSERT = """
-    INSERT INTO meteo_observations (
-        num_poste, date, nom_usuel,
-        tmin, tmax, tmean,
-        latitude, longitude, altitude, tmed_tn_tx
-    ) VALUES %s
-"""
-
-METEO_BATCH_SIZE = 5000
+# 1. Génération dynamique de la liste de tous les départements
+DEPARTEMENTS = (
+    [f"{i:02d}" for i in range(1, 96)]  # "01" à "95"
+    + ["971", "972", "973", "974", "975"]  # DOMs
+    + ["984", "985", "986", "987", "988"]  # TOMs / Collectivités
+    + ["99"]  # Code spécifique
+)
 
 
-def _load_env() -> None:
-    load_dotenv(ROOT_DIR / ".env")
-
-
-def _connect():
-    return psycopg2.connect(
-        host=os.environ["POSTGRES_HOST"],
-        port=os.environ["POSTGRES_PORT"],
-        dbname=os.environ["POSTGRES_DATABASE"],
-        user=os.environ["POSTGRES_USER"],
-        password=os.environ["POSTGRES_PASSWORD"],
+def filtrer_donnees_meteo(chemin_gz):
+    """Lit un fichier météo compressed .csv.gz, applique les filtres et renomme les colonnes."""
+    df = pd.read_csv(
+        chemin_gz,
+        sep=";",
+        low_memory=False,
+        encoding="latin1",
+        compression="gzip",
     )
+    df = df.rename(columns={"AAAAMMJJ": "DATE"})
 
-
-def _ensure_schema(conn) -> None:
-    schema = os.environ["POSTGRES_SCHEMA"]
-    with conn.cursor() as cur:
-        cur.execute(
-            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema))
-        )
-        cur.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
-    conn.commit()
-
-
-def create_tables(conn) -> None:
-    """Execute DDL from init_db.sql inside the configured schema."""
-    ddl = SQL_FILE.read_text(encoding="utf-8")
-    with conn.cursor() as cur:
-        cur.execute(ddl)
-    conn.commit()
-    print(f"Tables créées via {SQL_FILE.name}.")
-
-
-def _none_if_na(value):
-    if value is None:
-        return None
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-    return value
-
-
-def insert_communes(conn, rows: list[dict]) -> None:
-    values = [
-        (
-            row.get("Commune"),
-            row.get("Code_Postal") or None,
-            row.get("Dept"),
-            row.get("Region"),
-            _none_if_na(row.get("Lon")),
-            _none_if_na(row.get("Lat")),
-            _none_if_na(row.get("Altitude")),
-        )
-        for row in rows
-    ]
-    with conn.cursor() as cur:
-        execute_values(cur, COMMUNE_INSERT, values, page_size=1_000)
-    conn.commit()
-    print(f"{len(values)} communes insérées.")
-
-
-def insert_meteo_observations(conn, df: pd.DataFrame) -> None:
-    if df.empty:
-        print("Aucune observation météo à insérer.")
-        return
-
-    work = df.copy()
-    work["DATE"] = pd.to_datetime(work["DATE"].astype(str), format="%Y%m%d", errors="coerce")
-    work = work.dropna(subset=["NUM_POSTE", "DATE"])
-
-    columns = [
+    colonnes_utiles = [
         "NUM_POSTE",
         "DATE",
         "NOM_USUEL",
-        "TMIN",
-        "TMAX",
-        "TMEAN",
+        "TN",
+        "TX",
+        "TM",
         "LAT",
         "LON",
         "ALTI",
-        "TMED_TN_TX",
+        "TNTXM",
     ]
-    for col in columns:
-        if col not in work.columns:
-            work[col] = None
+    df = df[[c for c in colonnes_utiles if c in df.columns]]
+    df["DATE"] = df["DATE"].astype(str)
 
-    total = 0
-    with conn.cursor() as cur:
-        for start in range(0, len(work), METEO_BATCH_SIZE):
-            chunk = work.iloc[start : start + METEO_BATCH_SIZE][columns]
-            values = [
-                (
-                    str(num_poste),
-                    date_val.date(),
-                    _none_if_na(nom_usuel),
-                    _none_if_na(tmin),
-                    _none_if_na(tmax),
-                    _none_if_na(tmean),
-                    _none_if_na(lat),
-                    _none_if_na(lon),
-                    _none_if_na(alti),
-                    _none_if_na(tmed),
-                )
-                for num_poste, date_val, nom_usuel, tmin, tmax, tmean, lat, lon, alti, tmed in chunk.itertuples(
-                    index=False, name=None
-                )
-            ]
-            execute_values(cur, METEO_INSERT, values, page_size=METEO_BATCH_SIZE)
-            total += len(values)
-            print(f"Observations météo insérées : {total} / {len(work)}")
+    # Conservation des données à partir du 1er janvier 1990
+    df = df[df["DATE"] >= "19900101"]
 
-    conn.commit()
-    print(f"{total} observations météo insérées.")
+    renommage = {
+        "TN": "TMIN",
+        "TX": "TMAX",
+        "TM": "TMEAN",
+        "TNTXM": "TMED_TN_TX",
+    }
+    return df.rename(columns=renommage)
 
 
-def main() -> None:
-    _load_env()
-    print("Connexion à PostgreSQL...")
-    conn = _connect()
+def telecharger_et_traiter(url, chemin_destination):
+    """Télécharge un fichier .gz, applique la fonction de nettoyage et le supprime."""
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(chemin_destination, "wb") as f:
+            f.write(response.content)
 
-    try:
-        _ensure_schema(conn)
-        create_tables(conn)
+        try:
+            df = filtrer_donnees_meteo(chemin_destination)
+            return df
+        except Exception as e:
+            print(f"   -> Erreur lors de la lecture du fichier : {e}")
+            return None
+        finally:
+            if os.path.exists(chemin_destination):
+                os.remove(chemin_destination)
+    else:
+        print(
+            f"   -> Fichier non trouvé ou erreur réseau (Code {response.status_code})"
+        )
+        return None
 
-        print("Téléchargement des communes...")
-        communes = fetch_communes()
-        insert_communes(conn, communes)
 
-        print("Téléchargement des données météo (peut être long)...")
-        meteo_df = fetch_meteo_data()
-        insert_meteo_observations(conn, meteo_df)
+# ==============================================================================
+# SCRIPT PRINCIPAL
+# ==============================================================================
 
-        print("Initialisation de la base terminée.")
-    finally:
-        conn.close()
+os.makedirs(DOSSIER_DESTINATION, exist_ok=True)
+dict_meteo_complet = {}
 
+print("=== DEBUT DU TRAITEMENT METEO (1990 - 2026) ===")
 
-if __name__ == "__main__":
-    main()
+for dept in DEPARTEMENTS:
+    print(f"\nTraitement du département {dept}...")
+
+    # Modèles d'URL OVH / Météo-France
+    url_1950_2024 = f"https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/QUOT/Q_{dept}_previous-1950-2024_RR-T-Vent.csv.gz"
+    url_2025_2026 = f"https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/QUOT/Q_{dept}_latest-2025-2026_RR-T-Vent.csv.gz"
+
+    dfs_dept = []
+
+    # 1. Récupération 1950-2024 (qui sera filtré post-1990 par la fonction)
+    chemin_tmp_1 = os.path.join(
+        DOSSIER_DESTINATION, f"tmp_{dept}_1950_2024.csv.gz"
+    )
+    df_old = telecharger_et_traiter(url_1950_2024, chemin_tmp_1)
+    if df_old is not None:
+        dfs_dept.append(df_old)
+
+    # 2. Récupération 2025-2026
+    chemin_tmp_2 = os.path.join(
+        DOSSIER_DESTINATION, f"tmp_{dept}_2025_2026.csv.gz"
+    )
+    df_recent = telecharger_et_traiter(url_2025_2026, chemin_tmp_2)
+    if df_recent is not None:
+        dfs_dept.append(df_recent)
+
+    # 3. Fusion et nettoyage final du département
+    if dfs_dept:
+        df_final_dept = pd.concat(dfs_dept, ignore_index=True)
+        # Élimination des doublons sur le poste et la date si recoupement
+        df_final_dept = df_final_dept.drop_duplicates(
+            subset=["NUM_POSTE", "DATE"]
+        )
+
+        dict_meteo_complet[dept] = df_final_dept
+        print(
+            f"   -> OK : {len(df_final_dept)} lignes conservées pour le dép {dept}."
+        )
+    else:
+        print(
+            f"   -> AUCUNE DONNEE récupérée pour le département {dept}."
+        )
+
+print(
+    f"\nTraitement terminé avec succès ! Dictionnaire prêt avec {len(dict_meteo_complet)} départements."
+)
+
+# ==============================================================================
+# COMBINAISON ET EXPORT EN PARQUET
+# ==============================================================================
+
+if dict_meteo_complet:
+    print("\n=== CONSOLIDATION ET EXPORT PARQUET ===")
+    
+    # 1. Empilage de tous les DataFrames de départements en un seul
+    df_global = pd.concat(dict_meteo_complet.values(), ignore_index=True)
+    
+    # 2. Nettoyage et typage propre des colonnes
+    # Conversion de la date au format datetime (YYYY-MM-DD)
+    df_global["DATE"] = pd.to_datetime(df_global["DATE"], format="%Y%m%d")
+    
+    # Conversion des colonnes numériques
+    cols_float = ["TMIN", "TMAX", "TMEAN", "TMED_TN_TX", "LAT", "LON", "ALTI"]
+    for col in cols_float:
+        if col in df_global.columns:
+            df_global[col] = pd.to_numeric(df_global[col], errors="coerce")
+
+    # Conversion des identifiants/textes en string / category
+    df_global["NUM_POSTE"] = df_global["NUM_POSTE"].astype(str)
+    if "NOM_USUEL" in df_global.columns:
+        df_global["NOM_USUEL"] = df_global["NOM_USUEL"].astype("category")
+
+    # Tri chronologique et par station
+    df_global = df_global.sort_values(by=["NUM_POSTE", "DATE"]).reset_index(drop=True)
+
+    # 3. Export en Parquet
+    chemin_parquet = os.path.join(DOSSIER_DESTINATION, "meteo_france_1990_2026.parquet")
+    
+    # Nécessite pyarrow ou fastparquet (pip install pyarrow)
+    df_global.to_parquet(chemin_parquet, index=False, engine="pyarrow", compression="snappy")
+
+    print(f"Export terminé avec succès !")
+    print(f"Fichier généré : {chemin_parquet}")
+    print(f"Volume total : {len(df_global):,} lignes / {len(df_global.columns)} colonnes")
+
+else:
+    print("Aucune donnée disponible pour l'export.")
