@@ -137,7 +137,7 @@ print(
 
 if dict_meteo_complet:
     print("\n=== CONSOLIDATION ET EXPORT PARQUET ===")
-    
+
     # 1. Empilage de tous les DataFrames de départements en un seul
     df_global = pd.concat(dict_meteo_complet.values(), ignore_index=True)
     
