@@ -36,7 +36,6 @@ sequenceDiagram
         DB-->>ReportDao: reports
         ReportDao-->>TempSvc: list[TemperatureReport]
 
-        TempSvc->>TempSvc: Inverse distance weighting<br/>and altitude correction
         TempSvc-->>DjuSvc: daily temperatures
 
         DjuSvc->>DjuSvc: Compute daily heating / cooling DJU
