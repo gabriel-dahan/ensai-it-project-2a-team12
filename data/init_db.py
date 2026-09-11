@@ -11,7 +11,7 @@ DEPARTEMENTS = (
     [f"{i:02d}" for i in range(1, 96)]  # "01" à "95"
     + ["971", "972", "973", "974", "975"]  # DOMs
     + ["984", "985", "986", "987", "988"]  # TOMs / Collectivités
-    + ["99"]  
+    + ["99"]  # Code spécifique
 )
 
 
@@ -137,7 +137,7 @@ print(
 
 if dict_meteo_complet:
     print("\n=== CONSOLIDATION ET EXPORT PARQUET ===")
-
+    
     # 1. Empilage de tous les DataFrames de départements en un seul
     df_global = pd.concat(dict_meteo_complet.values(), ignore_index=True)
     
