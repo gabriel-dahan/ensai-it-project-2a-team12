@@ -109,7 +109,7 @@ sequenceDiagram
     participant ZoneDao as GeoZoneDao
     participant DB as Database
 
-    User->>Controller: POST /zones (description, municipalities)
+    User->>Controller: POST /user/zones (description, municipalities)
     Controller->>AuthSvc: authenticate(credentials)
     AuthSvc-->>Controller: authenticated User
 
