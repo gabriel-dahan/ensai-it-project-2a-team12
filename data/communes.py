@@ -1,7 +1,7 @@
 """Fetch French municipalities from open data APIs."""
 
 from __future__ import annotations
-
+import os
 import pandas as pd
 import requests
 
@@ -11,7 +11,9 @@ URL_GEO = (
 )
 URL_ALTI = "https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json"
 BATCH_SIZE = 250
-
+DOSSIER_DESTINATION = (
+    "/home/onyxia/work/ensai-it-project-2a-team12/data/raw_data"
+)
 
 def fetch_communes() -> list[dict]:
     """Download communes and enrich them with altitude.
@@ -66,7 +68,17 @@ def fetch_communes() -> list[dict]:
 
 if __name__ == "__main__":
     rows = fetch_communes()
-    print("Création du fichier CSV...")
+    print("Création du fichier Parquet...")
     df = pd.DataFrame(rows)
-    df.to_csv("communes.csv", index=False, sep=";", encoding="utf-8-sig")
-    print("Fichier communes.csv généré avec succès !")
+
+    df["Code_Postal"] = df["Code_Postal"].astype(str)
+    df["Dept"] = df["Dept"].astype(str)
+    df["Region"] = df["Region"].astype(str) 
+    # Export Parquet
+    chemin_parquet= os.path.join(DOSSIER_DESTINATION, "communes.parquet")
+    df.to_parquet(chemin_parquet,
+        index=False,
+        engine="pyarrow",
+        compression="snappy"
+    )
+    print("Fichier communes.parquet généré avec succès !")

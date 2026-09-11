@@ -24,11 +24,20 @@ async def get_dju_info():
 async def calculate_point_dju(request: DjuPointRequest):
     """
     Receive the parameters required to calculate DJU for a geographic point.
-
-    The actual DJU calculation will be implemented in the service layer.
     """
 
     return {
         "message": "DJU point request received",
+        "parameters": request.model_dump(),
+    }
+
+@router.post("/zone")
+async def compute_zone_dju(request: DjuPointRequest):
+    """
+    Receive the parameters required to calculate DJU for a geographic zone.
+    """
+
+    return {
+        "message": "DJU zone request received",
         "parameters": request.model_dump(),
     }
