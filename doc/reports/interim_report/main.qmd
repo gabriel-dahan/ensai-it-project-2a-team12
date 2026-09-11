@@ -146,31 +146,9 @@ ENSAI\\
 
 # 3 \| Fonctionnalités de l'API
 
-## 3.1. Gestion des données et référentiels
+(Ne pas insister sur l'API pour le rapport)
 
-### 3.1.1. Intégration et mise à jour des relevés météorologiques
-
-### 3.1.2. Intégration du référentiel géographique administratif
-
-## 3.2. Moteur de calcul des DJU
-
-### 3.2.1. Calcul des DJU ponctuels géolocalisés
-
-### 3.2.2. Calcul des DJU agrégés sur un territoire
-
-## 3.3. Gestion spatiale et zonages territoriaux
-
-### 3.3.1. Prise en charge des zonages administratifs standards
-
-### 3.3.2. Création et gestion de zonages personnalisés (authentification utilisateur)
-
-### 3.3.3. Import de zonages externes
-
-## 3.4. Historique, persistance et restitution
-
-### 3.4.1. Historisation et mise en cache des calculs réalisés
-
-### 3.4.2. Export et mise en forme multi-formats des résultats
+...
 
 # Conclusion Intermédiaire
 
