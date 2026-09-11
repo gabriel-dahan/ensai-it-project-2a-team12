@@ -1,7 +1,17 @@
+"""
+API routes for user-specific features.
+"""
 
-from api.src.business_object.user import User
-from api.src.controllers.base_controller import BaseController
+from fastapi import APIRouter
 
 
-class UserController(BaseController):
+router = APIRouter()
+
+
+@router.get("/")
+async def get_current_user():
+    ...
+
+@router.post("/login")
+async def user_login():
     ...
