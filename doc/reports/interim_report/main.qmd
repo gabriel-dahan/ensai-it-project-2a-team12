@@ -116,13 +116,41 @@ ENSAI\\
 
 \tableofcontents
 
+# Introduction
+
+L'analyse des consommations énergétiques dans les secteurs résidentiel et tertiaire révèle une forte sensibilité aux variations de températures, dictée par les besoins de chauffage et de climatisation. Cette dépendance climatique constitue un défi majeur pour l'interprétation des évolutions de consommation, car il est souvent complexe de démêler la part imputable à la météo de celle liée à d'autres facteurs conjoncturels ou structurels, tels que les changements d'habitudes des usagers, le renouvellement des équipements ou la transition vers de nouvelles sources d'énergie. Pour s'affranchir de ce bruit climatique et évaluer objectivement les performances énergétiques, le degré jour unifié (DJU) s'impose comme l'outil de référence permettant de quantifier la rigueur du climat et de réaliser des calculs de consommations corrigées des variations climatiques. 
+
+
+C'est dans ce cadre que s'inscrit le présent projet, qui consiste à concevoir et développer une API dédiée au calcul automatisé des DJU, que ce soit en un point précis à partir de coordonnées GPS ou sur des territoires plus larges définis par des ensembles de communes.
+
 # 1 \| Organisation
 
-## 1.1. Organisation du groupe
+## 1.1. Cahier des charges
 
-...
+**Fonctionnalités de base**
 
-## 1.2. Organisation du travail
+Les fonctionnalités minimales de l'application sont :
+
+- La création des bases de données à partir des relevés de température des stations de Météo France et du référentiel des communes disponibles sur data.gouv.fr
+- Le calcul des DJU localisés sur une période et une périodicité donnée. Par exemple calcul des DJU mensuels du 1er janvier 2010 au 31 décembre 2025.
+- Intégrer les zonages Département, Région pour tous les utilisateurs
+- Le calcul des DJU sur un territoire avec une granularité, une période et une périodicité données. Par exemple calculer les DJU annuels des départements d'Ile-de-France du 1er janvier.
+- Permettre à un utilisateur authentifié de créer et de conserver ses propres zonages constitués d'ensemble de commune.
+
+**Fonctionnalités optionnelles**
+
+Les fonctionnalités optionnelles de l'application sont :
+
+- Conserver les résultats des calculs effectués
+- Mise en forme des résultats sous différents formats
+- Importer des zonages à partir de fichiers csv, json
+
+
+## 1.2. Organisation du groupe
+
+
+
+## 1.3. Organisation du travail
 
 ...
 
