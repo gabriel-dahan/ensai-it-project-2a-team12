@@ -1,8 +1,12 @@
 ---
 title: ""
+number-sections: true
+number-depth: 3
+
 format:
   pdf:
     documentclass: report
+    latex-auto-install: false
     header-includes: |
       \usepackage{enumitem}
       \setlist[itemize]{label=$\bullet$}
@@ -18,9 +22,9 @@ format:
       
       \usepackage{titlesec}
       
-      % Titres
+      % Titres principaux (chapitres / parties)
       \titleformat{\chapter}[hang]
-        {\normalfont\Large\bfseries\color{pale-red}}
+        {\normalfont\Large\bfseries\color{black}}
         {\thechapter} 
         {0.8em} 
         {}
@@ -28,14 +32,14 @@ format:
       
       % Sections
       \titleformat{\section}
-        {\normalfont\large\bfseries\color{pale-blue}} 
+        {\normalfont\large\bfseries\color{black}} 
         {\thesection}
         {1em}
         {}
         
-      %  Sous-sections
+      % Sous-sections
       \titleformat{\subsection}
-        {\normalfont\normalsize\bfseries\color{gray}}
+        {\normalfont\normalsize\bfseries\color{black}}
         {\thesubsection}
         {1em}
         {}
@@ -46,15 +50,14 @@ geometry: top=1.5cm, bottom=1.5cm, left=2.5cm, right=2.5cm
 
 link-citations: true
 colorlinks: true
-linkcolor: pale-blue
+linkcolor: black
 urlcolor: pale-blue
 citecolor: pale-blue
 editor: visual
 
 execute: 
-  freeze: auto # Empêche l'execution systématique de toutes les computations à chaque rendu.
+  freeze: auto
 
-# On n'affiche que les résultats voulus.
 echo: FALSE
 warning: FALSE
 message: FALSE
@@ -98,7 +101,7 @@ www.ensai.fr\\
 \textbf{Aziz Yousfi}\\
 \textbf{Eudes Sterlin}\\
 \textbf{Gabriel Dahan}\\
-\textbf{Gwenael Lassalle}\\
+\textbf{Gwenaël Lassalle}\\
 \textbf{Marceau Feral}
 \end{flushleft}
 
@@ -116,16 +119,15 @@ ENSAI\\
 
 \tableofcontents
 
-# Introduction
+# Introduction {.unnumbered}
 
-L'analyse des consommations énergétiques dans les secteurs résidentiel et tertiaire révèle une forte sensibilité aux variations de températures, dictée par les besoins de chauffage et de climatisation. Cette dépendance climatique constitue un défi majeur pour l'interprétation des évolutions de consommation, car il est souvent complexe de démêler la part imputable à la météo de celle liée à d'autres facteurs conjoncturels ou structurels, tels que les changements d'habitudes des usagers, le renouvellement des équipements ou la transition vers de nouvelles sources d'énergie. Pour s'affranchir de ce bruit climatique et évaluer objectivement les performances énergétiques, le degré jour unifié (DJU) s'impose comme l'outil de référence permettant de quantifier la rigueur du climat et de réaliser des calculs de consommations corrigées des variations climatiques. 
-
+L'analyse des consommations énergétiques dans les secteurs résidentiel et tertiaire révèle une forte sensibilité aux variations de températures, dictée par les besoins de chauffage et de climatisation. Cette dépendance climatique constitue un défi majeur pour l'interprétation des évolutions de consommation, car il est souvent complexe de démêler la part imputable à la météo de celle liée à d'autres facteurs conjoncturels ou structurels, tels que les changements d'habitudes des usagers, le renouvellement des équipements ou la transition vers de nouvelles sources d'énergie. Pour s'affranchir de ce bruit climatique et évaluer objectivement les performances énergétiques, le degré jour unifié (DJU) s'impose comme l'outil de référence permettant de quantifier la rigueur du climat et de réaliser des calculs de consommations corrigées des variations climatiques.
 
 C'est dans ce cadre que s'inscrit le présent projet, qui consiste à concevoir et développer une API dédiée au calcul automatisé des DJU, que ce soit en un point précis à partir de coordonnées GPS ou sur des territoires plus larges définis par des ensembles de communes.
 
-# 1 \| Organisation
+# Organisation
 
-## 1.1. Cahier des charges
+## Cahier des charges
 
 **Fonctionnalités de base**
 
@@ -145,30 +147,27 @@ Les fonctionnalités optionnelles de l'application sont :
 - Mise en forme des résultats sous différents formats
 - Importer des zonages à partir de fichiers csv, json
 
+## Organisation du groupe
 
-## 1.2. Organisation du groupe
-
-
-
-## 1.3. Organisation du travail
+## Organisation du travail
 
 ...
 
-# 2 \| Diagrammes
+# Diagrammes
 
-## 2.1. Diagramme des cas d'utilisation
-
-...
-
-## 2.2. Diagramme d'activité
+## Diagramme des cas d'utilisation
 
 ...
 
-## 2.3. Diagramme de classe
+## Diagramme d'activité
 
 ...
 
-## 2.4. Diagramme de séquence
+## Diagramme de classe
+
+...
+
+## Diagramme de séquence
 
 ...
 
