@@ -79,7 +79,7 @@ www.ensai.fr\\
 \includegraphics{resources/ensai_logo.png}\\
 \vspace{1.0cm}
 
-{\LARGE\textsc{Interim Report}}\\
+{\LARGE\textsc{Rapport intermédiaire}}\\
 
 \vspace{2.5cm}
 
@@ -87,7 +87,7 @@ www.ensai.fr\\
 \vspace{0.8cm}
 
 \begin{flushleft}
-\emph{Theme :}\\
+\emph{Sujet :}\\
 \textbf{DJU Computing API}\\
 \end{flushleft}
 
@@ -97,7 +97,7 @@ www.ensai.fr\\
 \vspace{2.5cm}
 
 \begin{flushleft}
-\emph{Collaborators :}\\
+\emph{Groupe 12 :}\\
 \textbf{Aziz Yousfi}\\
 \textbf{Eudes Sterlin}\\
 \textbf{Gabriel Dahan}\\
@@ -106,7 +106,7 @@ www.ensai.fr\\
 \end{flushleft}
 
 \begin{flushright}
-\emph{Tutor :}\\
+\emph{Tuteur :}\\
 \textbf{Thierry Mathé}\\
 \end{flushright}
 
@@ -121,11 +121,17 @@ ENSAI\\
 
 # Introduction {.unnumbered}
 
-L'analyse des consommations énergétiques dans les secteurs résidentiel et tertiaire révèle une forte sensibilité aux variations de températures, dictée par les besoins de chauffage et de climatisation. Cette dépendance climatique constitue un défi majeur pour l'interprétation des évolutions de consommation, car il est souvent complexe de démêler la part imputable à la météo de celle liée à d'autres facteurs conjoncturels ou structurels, tels que les changements d'habitudes des usagers, le renouvellement des équipements ou la transition vers de nouvelles sources d'énergie. Pour s'affranchir de ce bruit climatique et évaluer objectivement les performances énergétiques, le degré jour unifié (DJU) s'impose comme l'outil de référence permettant de quantifier la rigueur du climat et de réaliser des calculs de consommations corrigées des variations climatiques.
+Dans les secteurs résidentiel et tertiaire, les consommations d’énergie sont liées aux conditions météorologiques, principalement en raison des besoins de chauffage en hiver et de climatisation en été. Cependant, cette forte thermosensibilité complique considérablement l’analyse des données énergétiques au fil des années. En effet, face à une baisse ou à une hausse des consommations observées, il est difficile de faire la part entre l’impact direct des variations de températures et celui de facteurs structurels ou comportementaux (comme la rénovation thermique des bâtiments, le remplacement de chaudières énergivores ou l'évolution des habitudes des usagers).
 
-C'est dans ce cadre que s'inscrit le présent projet, qui consiste à concevoir et développer une API dédiée au calcul automatisé des DJU, que ce soit en un point précis à partir de coordonnées GPS ou sur des territoires plus larges définis par des ensembles de communes.
+Afin de corriger cet effet météo et d’évaluer objectivement l'efficacité énergétique, le Degré Jour Unifié (DJU) s’impose comme l’indicateur de référence. En mesurant l’écart quotidien entre la température extérieure et un seuil de confort thermique donné, les DJU permettent d’estimer la rigueur du climat et de calculer des consommations corrigées des variations climatiques (CVC). Cette correction permet de s'affranchir du biais météorologique pour n’observer que les véritables évolutions de la performance énergétique.
+
+C’est dans ce contexte que s’inscrit notre projet. Il a pour but de concevoir et de développer une application sous forme d'API performante et modulaire, capable de calculer et d’agréger automatiquement les DJU. L’utilisateur doit pouvoir interroger le système aussi bien sur un point précis repéré par ses coordonnées géographiques (via une méthode d'interpolation spatiale et altimétrique à partir des stations Météo-France) que sur des découpages territoriaux administratifs (communes, départements, régions) ou sur des zonages personnalisés.
+
+Dans un premier temps, nous détaillerons le cahier des charges, en précisant le périmètre du système, les besoins fonctionnels et les contraintes techniques. Dans un second temps, nous présenterons la conception générale et l'architecture logicielle de notre application à travers les différents diagrammes de modélisation et la structuration des bases de données.
 
 # Organisation
+
+Cette partie est consacrée au pilotage du projet. Elle formalise les spécifications du cahier des charges, justifie les choix fonctionnels de l'application et présente l'organisation du travail en groupe.
 
 ## Cahier des charges
 
@@ -146,6 +152,18 @@ Les fonctionnalités optionnelles de l'application sont :
 - Conserver les résultats des calculs effectués
 - Mise en forme des résultats sous différents formats
 - Importer des zonages à partir de fichiers csv, json
+
+## Questionnement et choix 
+
+## Description des fonctionnalités
+
+La première fonctionnalité de notre application consiste en l’ingestion et la structuration des données sources nécessaires aux calculs. L’application doit pouvoir charger, nettoyer et intégrer deux grands ensembles de données ouverts issus de data.gouv.fr : d'une part, les relevés climatologiques quotidiens des stations de Météo-France (températures minimales, maximales, coordonnées géographiques et altitudes), et d'autre part, le référentiel administratif et démographique des communes françaises. Cette étape préliminaire constitue le socle indispensable au fonctionnement du moteur de calcul.
+
+Sur cette base, le cœur de l’application repose sur le calcul des DJU ponctuels. À partir de coordonnées géographiques (latitude, longitude, altitude), le système évalue la température locale via une interpolation spatiale par pondération inverse des distances prenant en compte les stations météo environnantes. L'utilisateur peut alors paramétrer les seuils de confort thermique souhaités (par exemple 15 °C ou 18 °C pour le chauffage, et un seuil dédié pour la climatisation) ainsi que l'horizon temporel (dates de début et de fin) et le pas d'agrégation temporelle (cumuls quotidiens, mensuels ou annuels).
+
+L’application propose également une dimension d’agrégation territoriale. En effet, l’utilisateur doit pouvoir obtenir les DJU d’un territoire administratif complet (départements, régions ou France métropolitaine). Le calcul ne s’effectue plus ici en un point unique, mais nécessite de calculer les DJU de l'ensemble des communes composant le territoire visé, puis de réaliser une agrégation spatiale par moyenne pondérée par la population de chaque commune. Cela permet d’obtenir un indicateur représentatif de l'exposition réelle des populations aux variations climatiques.
+
+Enfin, pour offrir un service modulable et adapté aux besoins métiers, un espace utilisateur authentifié est intégré. Il permet à un utilisateur de concevoir, sauvegarder et administrer ses propres zonages territoriaux sur mesure (regroupements spécifiques de communes, territoires de contrats de transition écologique, zones d'études privées), afin de pouvoir relancer des calculs récurrents sur ces périmètres sans avoir à redéfinir la liste des communes à chaque requête.
 
 ## Organisation du groupe
 
@@ -169,9 +187,12 @@ Les fonctionnalités optionnelles de l'application sont :
 
 ## Diagramme de séquence
 
+
+## Diagramme de packages
+
 ...
 
-# 3 \| Fonctionnalités de l'API
+# Fonctionnalités de l'API
 
 (Ne pas insister sur l'API pour le rapport)
 
