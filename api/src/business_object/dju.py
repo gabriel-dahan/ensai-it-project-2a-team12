@@ -84,13 +84,12 @@ class DjuCalculation:
     zone: Optional["GeographicZone"] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    # Implied by User "1" --> "*" DjuCalculation, as with Zoning.owner.
     owner: Optional["User"] = None
     computed_at: Optional[date] = None
     results: list[DjuResult] = field(default_factory=list)
     # Candidate stations for a point-based calculation (no zone to derive
     # them from).
-    candidate_stations: list["MeteoStation"] = field(default_factory=list)
+    candidate_stations: list["MeteoStation"] = field(default_factory=list) 
     # Raw per-day DJU values, kept so aggregate() can be re-run with a
     # different time_step without recomputing from temperature reports.
     _daily_values: dict[date, float] = field(default_factory=dict, repr=False)
