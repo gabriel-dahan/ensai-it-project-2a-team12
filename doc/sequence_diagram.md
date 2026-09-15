@@ -12,6 +12,40 @@ referential (data.gouv.fr / geo.api.gouv.fr), then persists stations, daily
 reports and official zonings (municipality, department, region).
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor Admin
     participant Init as Init scripts
@@ -60,6 +94,40 @@ estimated from nearby stations (inverse distance weighting, optional altitude
 correction).
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor Client
     participant Controller as DjuController
@@ -121,6 +189,40 @@ Any client can list official geographic zones (departments and regions) and
 their municipalities. These zonings are available to every user.
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor Client
     participant Controller as ZoneController
@@ -147,6 +249,40 @@ required. Municipality-level DJU are then aggregated (for example
 population-weighted).
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor Client
     participant Controller as DjuController
@@ -219,6 +355,40 @@ Authentication is required before creating, importing or managing personal
 zonings (F4).
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor User
     participant Controller as UserController
@@ -249,6 +419,40 @@ An authenticated user builds a custom territory as a set of municipalities and
 stores it for later DJU calculations.
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor User
     participant Controller as ZoneController
@@ -286,6 +490,40 @@ The owner can update the description, add or remove municipalities, or delete
 a personal zoning.
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor User
     participant Controller as ZoneController
@@ -333,6 +571,40 @@ API parses the file, maps rows to known communes, then stores a personal
 zoning (same persistence path as F4).
 
 ```mermaid
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#ffffff",
+      "mainBkg": "#ffffff",
+      "textColor": "#111111",
+      "primaryColor": "#ffffff",
+      "primaryTextColor": "#111111",
+      "primaryBorderColor": "#222222",
+      "secondaryColor": "#f3f4f6",
+      "tertiaryColor": "#ffffff",
+      "lineColor": "#222222",
+      "actorBkg": "#ffffff",
+      "actorBorder": "#222222",
+      "actorTextColor": "#111111",
+      "actorLineColor": "#222222",
+      "signalColor": "#111111",
+      "signalTextColor": "#111111",
+      "labelBoxBkgColor": "#ffffff",
+      "labelBoxBorderColor": "#222222",
+      "labelTextColor": "#111111",
+      "loopTextColor": "#111111",
+      "noteBkgColor": "#fff3cd",
+      "noteTextColor": "#111111",
+      "noteBorderColor": "#222222",
+      "activationBkgColor": "#e5e7eb",
+      "activationBorderColor": "#222222",
+      "sequenceNumberColor": "#ffffff",
+      "fontFamily": "arial",
+      "fontSize": "16px"
+    }
+  }
+}%%
 sequenceDiagram
     actor User
     participant Controller as ZoneController

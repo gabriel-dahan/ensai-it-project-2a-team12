@@ -24,9 +24,10 @@ class GeographicZone:
     name : str
     _zone_type:ClassVar[str] = "zone"
 
-    id; optional[str]
+    id; Optional[str]
     name: str
-     @property
+    
+    @property
     def zone_type(self) -> str:
         return self._zone_type
 
@@ -49,7 +50,7 @@ class GeographicZone:
 
 @dataclass
 class Region(GeographicZone):
-     insee_code: str
+    insee_code: str
     departments: list["Department"] = field(default_factory=list)
     _zone_type: ClassVar[str] = "region"
  

@@ -13,6 +13,10 @@ format:
       \usepackage[bottom]{footmisc}
       \usepackage[dvipsnames]{xcolor}
       \usepackage{booktabs}
+      \usepackage{float}
+      \usepackage{placeins}
+      \usepackage{caption}
+      \captionsetup{font=small,labelfont=bf,skip=6pt}
       
       \definecolor{pale-red}{RGB}{211, 93, 93}
       \definecolor{pale-blue}{RGB}{42, 77, 126}
@@ -79,7 +83,9 @@ www.ensai.fr\\
 \includegraphics{resources/ensai_logo.png}\\
 \vspace{1.0cm}
 
-{\LARGE\textsc{Interim Report}}\\
+{\LARGE\textsc{Rapport Intermédiaire}}\\
+\vspace{0.3cm}
+{\LARGE Dossier d'Analyse}\\
 
 \vspace{2.5cm}
 
@@ -88,7 +94,7 @@ www.ensai.fr\\
 
 \begin{flushleft}
 \emph{Theme :}\\
-\textbf{DJU Computing API}\\
+\textbf{API de calcul de DJU}\\
 \end{flushleft}
 
 \vspace{0.8cm}
@@ -157,21 +163,126 @@ Les fonctionnalités optionnelles de l'application sont :
 
 ## Diagramme des cas d'utilisation
 
-...
+Le diagramme des cas d'utilisation identifie trois profils. L'utilisateur anonyme peut calculer un DJU ponctuel ou zonal et consulter les zonages officiels (départements et régions). L'utilisateur authentifié hérite de ces droits et peut en outre créer, importer et gérer des zonages personnalisés constitués d'ensembles de communes. L'administrateur est chargé d'alimenter l'application à partir des données sources (relevés Météo-France et référentiel géographique). L'import d'un fichier de zonage étend le cas d'utilisation de création d'un zonage personnalisé.
+
+![Diagramme des cas d'utilisation](resources/diagrams/use_case_diagram.png){fig-align="center" width="90%" fig-pos="H"}
+
+\clearpage
 
 ## Diagramme d'activité
 
-...
+Les diagrammes d'activité décrivent l'enchaînement des traitements métier, sans entrer dans le détail des couches logicielles. Ils couvrent l'initialisation des données, l'estimation des températures, le calcul des DJU et la gestion des zonages.
+
+L'initialisation des bases de données (figure~\ref{fig:act-init}) charge les fichiers de températures Météo-France par département, filtre les colonnes utiles et les dates à partir de 1990, déduplique les relevés, puis enregistre les stations et les observations quotidiennes. Le référentiel des communes est ensuite téléchargé, enrichi en altitude et structuré en départements et régions. L'estimation des températures locales (figure~\ref{fig:act-temp}) sélectionne les stations les plus proches, applique éventuellement une correction d'altitude, puis interpole les séries quotidiennes par pondération inverse de la distance (IDW).
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_1.png}
+\caption{Initialisation des bases de données}
+\label{fig:act-init}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_2.png}
+\caption{Estimation des températures locales}
+\label{fig:act-temp}
+\end{minipage}
+\end{figure}
+
+Le calcul d'un DJU ponctuel (figure~\ref{fig:act-point}) part d'une requête sur des coordonnées GPS. Après validation des paramètres, un résultat déjà calculé peut être réutilisé ; sinon les températures quotidiennes sont estimées, les DJU de chauffage (et éventuellement de climatisation) sont obtenus jour par jour, puis agrégés selon le pas de temps demandé. Le calcul d'un DJU zonal (figure~\ref{fig:act-zone}) charge d'abord le territoire et ses communes. Les zonages officiels sont publics, tandis qu'un zonage personnalisé n'est accessible qu'à son propriétaire. Les DJU communaux sont ensuite agrégés, par exemple en les pondérant par la population.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_3.png}
+\caption{Calcul d'un DJU ponctuel}
+\label{fig:act-point}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_4.png}
+\caption{Calcul d'un DJU zonal}
+\label{fig:act-zone}
+\end{minipage}
+\end{figure}
+
+La consultation des zonages (figure~\ref{fig:act-consult}) permet de lister les départements, les régions ou l'ensemble des zonages officiels. La création ou l'import d'un zonage personnalisé (figure~\ref{fig:act-create}) exige une authentification : l'utilisateur fournit une liste de communes ou un fichier CSV / JSON, que l'application contrôle avant d'enregistrer le zonage.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_5.png}
+\caption{Consultation des zonages}
+\label{fig:act-consult}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_6.png}
+\caption{Création ou import d'un zonage personnalisé}
+\label{fig:act-create}
+\end{minipage}
+\end{figure}
+
+La gestion d'un zonage personnalisé (figure~\ref{fig:act-manage}) est réservée au propriétaire. Après authentification, celui-ci peut modifier la description et la composition communale du zonage, ou le supprimer.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\textwidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_7.png}
+\caption{Gestion d'un zonage personnalisé}
+\label{fig:act-manage}
+\end{figure}
+
+\clearpage
 
 ## Diagramme de classe
 
-...
+Le diagramme de classes structure le domaine de l'application. `GeographicZone` factorise les zonages officiels : une région agrège des départements, un département agrège des communes. `Zoning` représente un territoire personnalisé, ensemble de communes associé à un `User`. Les stations météorologiques et leurs relevés quotidiens (`MeteoStation`, `TemperatureReport`) alimentent un `DjuCalculation`, qui produit des `DjuResult` selon un `DjuType` (chauffage ou climatisation) et un pas de temps d'agrégation.
+
+![Diagramme de classes](resources/diagrams/class_diagram.png){fig-align="center" width="85%" fig-pos="H"}
+
+\clearpage
 
 ## Diagramme de séquence
 
-...
+Les diagrammes de séquence décrivent les échanges entre le client, les couches de l'API (contrôleur, service, DAO) et la base de données. Ils couvrent les fonctionnalités F0 à F4, ainsi que l'import optionnel d'un zonage (FO3).
 
-# 3 \| Fonctionnalités de l'API
+L'administrateur déclenche l'initialisation des bases (F0). Les scripts d'alimentation téléchargent les fichiers de températures Météo-France, les filtrent et les enregistrent, puis construisent le référentiel géographique à partir de geo.api.gouv.fr et d'une API d'altimétrie.
+
+![Initialisation des bases de données (F0)](resources/diagrams/sequence_diagram_1.png){fig-align="center" width="100%" fig-pos="H"}
+
+Un client, anonyme ou authentifié, demande un DJU ponctuel (F1) pour des coordonnées GPS, une période et un pas de temps. Si un résultat comparable est déjà stocké, il est renvoyé directement ; sinon les températures sont interpolées à partir des stations voisines avant le calcul et la sauvegarde des DJU.
+
+![Calcul d'un DJU ponctuel (F1)](resources/diagrams/sequence_diagram_2.png){fig-align="center" width="100%" fig-pos="H"}
+
+Tout client peut consulter les zonages publics (F2) : départements et régions, ainsi que les communes qui les composent.
+
+![Consultation des zonages publics (F2)](resources/diagrams/sequence_diagram_3.png){fig-align="center" width="100%" fig-pos="H"}
+
+Le calcul d'un DJU zonal (F3) s'applique à un département, une région ou un zonage personnalisé. Les zonages officiels sont accessibles sans authentification ; un zonage personnel n'est calculable que par son propriétaire. Les DJU communaux sont ensuite agrégés sur le territoire.
+
+![Calcul d'un DJU zonal (F3)](resources/diagrams/sequence_diagram_4.png){fig-align="center" width="100%" fig-pos="H"}
+
+L'authentification précède toute opération sur les zonages personnels (F4). L'API vérifie l'identifiant et le mot de passe, puis ouvre une session en cas de succès, ou renvoie une erreur 401 sinon.
+
+![Authentification d'un utilisateur](resources/diagrams/sequence_diagram_5.png){fig-align="center" width="100%" fig-pos="H"}
+
+Un utilisateur authentifié crée un zonage personnalisé (F4) en envoyant une description et une liste de communes. L'application vérifie que toutes les communes existent avant d'enregistrer le zonage.
+
+![Création d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_6.png){fig-align="center" width="100%" fig-pos="H"}
+
+Le propriétaire peut ensuite modifier la description ou la composition d'un zonage, ou le supprimer. Les tentatives sur un zonage inexistant ou appartenant à un tiers sont rejetées (404 ou 403).
+
+![Gestion d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_7.png){fig-align="center" width="100%" fig-pos="H"}
+
+Enfin, l'import optionnel (FO3) permet de constituer un zonage à partir d'un fichier CSV ou JSON. Après authentification, le fichier est analysé, les communes sont résolues, puis le zonage est enregistré selon le même chemin que la création manuelle.
+
+![Import d'un zonage depuis un fichier (FO3)](resources/diagrams/sequence_diagram_8.png){fig-align="center" width="100%" fig-pos="H"}
+
+# Fonctionnalités de l'API
 
 (Ne pas insister sur l'API pour le rapport)
 
