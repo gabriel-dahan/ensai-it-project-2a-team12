@@ -155,6 +155,26 @@ Les fonctionnalités optionnelles de l'application sont :
 
 ## Questionnement et choix 
 
+La mise en place de l’architecture et du moteur de calcul a nécessité de répondre à plusieurs problématiques techniques et méthodologiques dès la phase de conception. Celles-ci concernent l’authentification des utilisateurs, le stockage et le format des données massives, les méthodes géométriques d’estimation des températures, ainsi que les stratégies de mise en cache.
+
+Le premier questionnement a porté sur la gestion des droits et l’accès à l’API : fallait-il concevoir une application totalement ouverte ou intégrer un système de comptes authentifiés ? Contrairement aux fonctionnalités de consultation pure des DJU (ponctuels ou par divisions administratives standard comme les départements et régions) qui doivent rester accessibles de manière directe, le cahier des charges impose de permettre à un utilisateur de sauvegarder ses propres découpages territoriaux. Nous avons donc arbitré en faveur d'un système à double niveau :  
+
+ - Un accès public ("visiteur") : permettant d'effectuer un calcul ponctuel (coordonnées GPS) ou territorial standard sans contrainte d'authentification.  
+
+ - Un accès authentifié ("utilisateur enregistré") : permettant à l'utilisateur de créer, consulter, modifier et supprimer ses zonages personnalisés sans interférer avec les données des autres usagers.  
+ 
+Le second questionnement a concerné l’ingestion et la persistance des relevés de température issus de Météo-France. Les fichiers sources départementaux représentent un volume considérable de données compressées au format CSV. L'utilisation directe de ces fichiers bruts à chaque requête aurait provoqué des temps de latence.
+
+Pour les données de référence géographiques et la gestion des comptes/zonages utilisateurs, nous avons opté pour une base de données relationnelle SQL (accessible via notre couche DAO), garantissant l'intégrité référentielle des communes et des utilisateurs.  Pour les séries temporelles de températures, la conversion vers un format analytique optimisé (fichiers Parquet indexés par station et par date) a été privilégiée pour accélérer les opérations de filtrage temporel et de jointures spatiales.  
+
+De plus, ces jeux de données comportent des valeurs manquantes. Nous avons décidé d'appliquer une interpolation temporelle locale sur les relevés immédiatement voisins pour combler des absences ponctuelles quand cela sera possible.
+ 
+Il est rare de disposer d'une station météo sur place pour évaluer la température en un point donné. Le calcul nécessite donc d'interpoler les valeurs mesurées par les stations environnantes.  
+
+Les coordonnées étant fournies sous forme de latitude et longitude, nous utiliserons la méthode d'Haversine pour calculer les distances. Ensuite, la méthode de pondération inverse des distances a été choisie pour affecter un poids prépondérant aux stations les plus proches. Enfin, pour respecter la réalité physique du climat, nous avons intégré la correction altimétrique standard préconisée, consistant à soustraire 0,65 °C par tranche de 100 mètres d'élévation entre les stations et le point cible.
+
+Enfin, le dernier point critique concerne le coût en calcul des agrégations géographiques. Calculer les DJU d'une région ou d'un département implique d'estimer les DJU de chaque commune membre, puis de pondérer ces valeurs par la population communale respective. Répéter cette série de calculs pour des requêtes identiques sur les mêmes périodes aurait saturé le serveur.  Nous avons donc fait le choix de concevoir un mécanisme de cache et de persistance des résultats intermédiaires : les températures quotidiennes interpolées par commune ainsi que les agrégations annuelles ou mensuelles standard sont conservées après leur premier calcul, transformant les requêtes ultérieures en de simples lectures optimisées en base de données.  
+
 ## Description des fonctionnalités
 
 La première fonctionnalité de notre application consiste en l’ingestion et la structuration des données sources nécessaires aux calculs. L’application doit pouvoir charger, nettoyer et intégrer deux grands ensembles de données ouverts issus de data.gouv.fr : d'une part, les relevés climatologiques quotidiens des stations de Météo-France (températures minimales, maximales, coordonnées géographiques et altitudes), et d'autre part, le référentiel administratif et démographique des communes françaises. Cette étape préliminaire constitue le socle indispensable au fonctionnement du moteur de calcul.
@@ -171,7 +191,7 @@ Enfin, pour offrir un service modulable et adapté aux besoins métiers, un espa
 
 ...
 
-# Diagrammes
+# Modélisation UML
 
 ## Diagramme des cas d'utilisation
 
