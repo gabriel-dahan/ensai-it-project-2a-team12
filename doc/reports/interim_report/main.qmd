@@ -286,9 +286,6 @@ Le diagramme de classes structure le domaine de l'application. `GeographicZone` 
 
 ## Diagramme de séquence
 
-
-## Diagramme de packages
-
 Les diagrammes de séquence décrivent les échanges entre le client, les couches de l'API (contrôleur, service, DAO) et la base de données. Ils couvrent les fonctionnalités F0 à F4, ainsi que l'import optionnel d'un zonage (FO3).
 
 L'administrateur déclenche l'initialisation des bases (F0). Les scripts d'alimentation téléchargent les fichiers de températures Météo-France, les filtrent et les enregistrent, puis construisent le référentiel géographique à partir de geo.api.gouv.fr et d'une API d'altimétrie.
@@ -322,6 +319,10 @@ Le propriétaire peut ensuite modifier la description ou la composition d'un zon
 Enfin, l'import optionnel (FO3) permet de constituer un zonage à partir d'un fichier CSV ou JSON. Après authentification, le fichier est analysé, les communes sont résolues, puis le zonage est enregistré selon le même chemin que la création manuelle.
 
 ![Import d'un zonage depuis un fichier (FO3)](resources/diagrams/sequence_diagram_8.png){fig-align="center" width="100%" fig-pos="H"}
+
+## Diagramme de packages
+
+Afin de structurer efficacement notre projet, nous avons opté pour une architecture logicielle en couches qui garantit une nette séparation des responsabilités. La couche de présentation (Presentation Layer) expose l'API REST développée sous Python ; elle réceptionne les requêtes HTTP (calculs ponctuels, territoriaux ou gestion des zonages), valide les paramètres d'entrée et formate les réponses en JSON, CSV sans porter de logique métier. Elle transmet ces demandes à la couche de service (Service Layer), le cœur algorithmique de l'application, qui orchestre le calcul des DJU, l'interpolation spatiale IDW corrigée de l'altitude, l'authentification des utilisateurs et le contrôle préalable du cache pour éviter les recalculs redondants. Cette couche manipule des entités pivots définies dans la couche métier (Business Layer), telles que les stations météo, les communes ou les résultats de DJU. Enfin, les échanges avec les supports de persistance sont entièrement délégués à la couche d'accès aux données (DAO), qui abstrait à la fois l'interrogation de la base relationnelle SQL et la lecture des températures stockés aux formats Parquet. Enfin, un module de tests unitaires permet de vérifier la justesse de nos calculs et le bon fonctionnement de l'API.
 
 # Fonctionnalités de l'API
 
