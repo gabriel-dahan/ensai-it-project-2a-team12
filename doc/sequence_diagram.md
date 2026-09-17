@@ -49,38 +49,24 @@ reports and official zonings (municipality, department, region).
 sequenceDiagram
     actor Admin
     participant Init as Init scripts
-    participant Meteo as Météo-France / data.gouv.fr
-    participant Geo as geo.api.gouv.fr
-    participant Alti as Altimetry API
+    participant Ext as External sources
     participant DAO as DAO layer
     participant DB as Database
 
     Admin->>Init: Start database initialization
 
-    rect rgb(240, 248, 255)
-        Note over Init,DB: Weather data
-        loop For each department
-            Init->>Meteo: Download daily temperature file (.csv.gz)
-            Meteo-->>Init: Compressed SYNOP records
-            Init->>Init: Filter columns, keep dates from 1990,<br/>deduplicate (station, date)
-        end
-        Init->>DAO: save_stations_and_reports(data)
-        DAO->>DB: INSERT meteo_station, temperature_report
-        DB-->>DAO: ok
-    end
+    Init->>Ext: Download Météo-France temperature files
+    Ext-->>Init: SYNOP records
+    Init->>Init: Filter, deduplicate from 1990
+    Init->>DAO: save_stations_and_reports(data)
+    DAO->>DB: INSERT stations and reports
+    DB-->>DAO: ok
 
-    rect rgb(245, 255, 245)
-        Note over Init,DB: Geographic referential
-        Init->>Geo: GET /communes (name, centre, department, region)
-        Geo-->>Init: list of municipalities
-        loop Batches of municipalities
-            Init->>Alti: GET elevations(lon, lat)
-            Alti-->>Init: altitude
-        end
-        Init->>DAO: save_zones(municipalities, departments, regions)
-        DAO->>DB: INSERT municipality, department, region and links
-        DB-->>DAO: ok
-    end
+    Init->>Ext: Fetch communes, departments, regions + altitudes
+    Ext-->>Init: Geographic referential
+    Init->>DAO: save_zones(...)
+    DAO->>DB: INSERT official zonings
+    DB-->>DAO: ok
 
     Init-->>Admin: Databases ready
 ```
@@ -131,56 +117,31 @@ correction).
 sequenceDiagram
     actor Client
     participant Controller as DjuController
-    participant DjuSvc as DjuService
-    participant TempSvc as TemperatureService
-    participant StationDao as MeteoStationDao
-    participant ReportDao as TemperatureReportDao
-    participant DjuDao as DjuDao
+    participant Service as DjuService
+    participant DAO as DAO layer
     participant DB as Database
 
-    Client->>Controller: POST /dju/point<br/>(lat, lon, period, thresholds, time step, n stations)
-    Controller->>Controller: Validate request (DjuPointRequest)
+    Client->>Controller: POST /dju/point
+    Controller->>Service: calculate_point_dju(params)
 
-    alt Invalid parameters
-        Controller-->>Client: 400 Bad Request
-    else Valid request
-        Controller->>DjuSvc: calculate_point_dju(params)
+    Service->>DAO: find_reusable_result(params)
+    DAO->>DB: SELECT cached DJU
+    DB-->>DAO: result or none
+    DAO-->>Service: cached?
 
-        DjuSvc->>DjuDao: find_reusable_result(params)
-        DjuDao->>DB: SELECT cached DJU
-        DB-->>DjuDao: existing result or none
-        DjuDao-->>DjuSvc: cached result?
-
-        alt Cached result available
-            DjuSvc-->>Controller: list[DjuResult]
-        else Compute from meteorological data
-            DjuSvc->>TempSvc: estimate_temperatures(lat, lon, period, n)
-            TempSvc->>StationDao: get_nearby_stations(lat, lon, n)
-            StationDao->>DB: SELECT nearest stations (Haversine)
-            DB-->>StationDao: stations
-            StationDao-->>TempSvc: list[MeteoStation]
-
-            TempSvc->>ReportDao: get_reports(stations, start, end)
-            ReportDao->>DB: SELECT temperature reports
-            DB-->>ReportDao: reports
-            ReportDao-->>TempSvc: list[TemperatureReport]
-
-            TempSvc->>TempSvc: IDW interpolation + altitude correction
-            TempSvc-->>DjuSvc: daily temperatures
-
-            DjuSvc->>DjuSvc: Compute daily heating / cooling DJU
-            DjuSvc->>DjuSvc: Aggregate by time step
-
-            DjuSvc->>DjuDao: save(DjuCalculation)
-            DjuDao->>DB: INSERT results
-            DB-->>DjuDao: ok
-            DjuDao-->>DjuSvc: saved
-
-            DjuSvc-->>Controller: list[DjuResult]
-        end
-
-        Controller-->>Client: JSON response
+    alt Cached result available
+        Service-->>Controller: list[DjuResult]
+    else Compute
+        Service->>DAO: get nearby stations and reports
+        DAO->>DB: SELECT stations / temperatures
+        DB-->>Service: meteorological data
+        Service->>Service: IDW + altitude, compute and aggregate DJU
+        Service->>DAO: save(DjuCalculation)
+        DAO->>DB: INSERT results
+        Service-->>Controller: list[DjuResult]
     end
+
+    Controller-->>Client: JSON response
 ```
 
 ## 3. Consult public zonings (F2)
@@ -226,17 +187,17 @@ their municipalities. These zonings are available to every user.
 sequenceDiagram
     actor Client
     participant Controller as ZoneController
-    participant ZoneSvc as ZoneService
-    participant ZoneDao as GeoZoneDao
+    participant Service as ZoneService
+    participant DAO as DAO layer
     participant DB as Database
 
     Client->>Controller: GET /zones?type=department|region
-    Controller->>ZoneSvc: list_public_zones(zone_type)
-    ZoneSvc->>ZoneDao: find_by_type(zone_type)
-    ZoneDao->>DB: SELECT zones and municipalities
-    DB-->>ZoneDao: zone rows
-    ZoneDao-->>ZoneSvc: list[GeographicZone]
-    ZoneSvc-->>Controller: departments or regions
+    Controller->>Service: list_public_zones(type)
+    Service->>DAO: find_by_type(type)
+    DAO->>DB: SELECT zones and municipalities
+    DB-->>DAO: zone rows
+    DAO-->>Service: list[GeographicZone]
+    Service-->>Controller: departments or regions
     Controller-->>Client: JSON list of public zonings
 ```
 
@@ -286,67 +247,32 @@ population-weighted).
 sequenceDiagram
     actor Client
     participant Controller as DjuController
-    participant AuthSvc as AuthService
-    participant DjuSvc as DjuService
-    participant ZoneSvc as ZoneService
-    participant ZoneDao as GeoZoneDao
-    participant DjuDao as DjuDao
+    participant Service as DjuService
+    participant DAO as DAO layer
     participant DB as Database
 
-    Client->>Controller: POST /dju/zone<br/>(zone id, period, thresholds, time step)
-    Controller->>Controller: Validate request
+    Client->>Controller: POST /dju/zone
+    Note over Controller: Auth required for personal zonings
+    Controller->>Service: calculate_zone_dju(zone, params)
 
-    alt Invalid parameters
-        Controller-->>Client: 400 Bad Request
-    else Valid request
-        Controller->>ZoneSvc: get_zone(zone_id)
-        ZoneSvc->>ZoneDao: find_zone(zone_id)
-        ZoneDao->>DB: SELECT zone and municipalities
-        DB-->>ZoneDao: zone data
-        ZoneDao-->>ZoneSvc: GeographicZone
-        ZoneSvc-->>Controller: zone
+    Service->>DAO: find_reusable_result(zone, params)
+    DAO->>DB: SELECT cached DJU
+    DB-->>DAO: result or none
+    DAO-->>Service: cached?
 
-        alt Zone not found
-            Controller-->>Client: 404 Not Found
-        else Custom zoning: authentication required
-            Controller->>AuthSvc: authenticate(credentials)
-            alt Authentication failed or not the owner
-                AuthSvc-->>Controller: rejected
-                Controller-->>Client: 401 / 403
-            else Authenticated owner
-                AuthSvc-->>Controller: User
-            end
-        else Public zone (department or region)
-            Note over Controller: No authentication required
-        end
-
-        Controller->>DjuSvc: calculate_zone_dju(zone, params)
-
-        DjuSvc->>DjuDao: find_reusable_result(zone, params)
-        DjuDao->>DB: SELECT cached DJU
-        DB-->>DjuDao: existing result or none
-        DjuDao-->>DjuSvc: cached result?
-
-        alt Cached result available
-            DjuSvc-->>Controller: list[DjuResult]
-        else Compute from municipalities
-            DjuSvc->>ZoneSvc: get_municipalities(zone)
-            ZoneSvc-->>DjuSvc: list[Municipality]
-
-            loop For each municipality
-                DjuSvc->>DjuSvc: calculate_point_dju(municipality coordinates)
-            end
-
-            DjuSvc->>DjuSvc: Aggregate municipality results<br/>(e.g. population-weighted)
-            DjuSvc->>DjuDao: save(DjuCalculation)
-            DjuDao->>DB: INSERT results
-            DB-->>DjuDao: ok
-
-            DjuSvc-->>Controller: list[DjuResult]
-        end
-
-        Controller-->>Client: JSON response
+    alt Cached result available
+        Service-->>Controller: list[DjuResult]
+    else Compute
+        Service->>DAO: get municipalities of the zone
+        DAO->>DB: SELECT municipalities
+        DB-->>Service: list[Municipality]
+        Service->>Service: Point DJU per municipality, then aggregate
+        Service->>DAO: save(DjuCalculation)
+        DAO->>DB: INSERT results
+        Service-->>Controller: list[DjuResult]
     end
+
+    Controller-->>Client: JSON response
 ```
 
 ## 5. Authenticate a user
@@ -392,25 +318,19 @@ zonings (F4).
 sequenceDiagram
     actor User
     participant Controller as UserController
-    participant AuthSvc as AuthService
-    participant UserDao as UserDao
+    participant Service as AuthService
+    participant DAO as DAO layer
     participant DB as Database
 
-    User->>Controller: POST /user/login (username, password)
-    Controller->>AuthSvc: authenticate(credentials)
-    AuthSvc->>UserDao: find_by_username(username)
-    UserDao->>DB: SELECT user
-    DB-->>UserDao: user row or none
-    UserDao-->>AuthSvc: User?
-
-    alt Unknown user or invalid password
-        AuthSvc-->>Controller: rejected
-        Controller-->>User: 401 Unauthorized
-    else Valid credentials
-        AuthSvc->>AuthSvc: Issue session / token
-        AuthSvc-->>Controller: authenticated User
-        Controller-->>User: 200 OK (session)
-    end
+    User->>Controller: POST /user/login
+    Controller->>Service: authenticate(credentials)
+    Service->>DAO: find_by_username(username)
+    DAO->>DB: SELECT user
+    DB-->>DAO: user row
+    DAO-->>Service: User
+    Service->>Service: Issue session / token
+    Service-->>Controller: authenticated User
+    Controller-->>User: 200 OK (session)
 ```
 
 ## 6. Create a personalized zoning (F4)
@@ -456,32 +376,19 @@ stores it for later DJU calculations.
 sequenceDiagram
     actor User
     participant Controller as ZoneController
-    participant AuthSvc as AuthService
-    participant ZoneSvc as ZoneService
-    participant ZoneDao as GeoZoneDao
+    participant Service as ZoneService
+    participant DAO as DAO layer
     participant DB as Database
 
-    User->>Controller: POST /user/zones (description, municipalities)
-    Controller->>AuthSvc: authenticate(credentials)
-    AuthSvc-->>Controller: authenticated User?
-
-    alt Authentication failed
-        Controller-->>User: 401 Unauthorized
-    else User is authenticated
-        Controller->>ZoneSvc: create_zoning(user, description, municipalities)
-        ZoneSvc->>ZoneSvc: Validate that municipalities exist
-        alt Invalid municipalities
-            ZoneSvc-->>Controller: error
-            Controller-->>User: 400 Bad Request
-        else Valid zoning
-            ZoneSvc->>ZoneDao: save(Zoning)
-            ZoneDao->>DB: INSERT zoning and municipality links
-            DB-->>ZoneDao: zoning id
-            ZoneDao-->>ZoneSvc: Zoning
-            ZoneSvc-->>Controller: Zoning
-            Controller-->>User: 201 Created zoning
-        end
-    end
+    User->>Controller: POST /user/zones
+    Controller->>Service: create_zoning(user, description, municipalities)
+    Service->>Service: Validate municipalities
+    Service->>DAO: save(Zoning)
+    DAO->>DB: INSERT zoning and links
+    DB-->>DAO: zoning id
+    DAO-->>Service: Zoning
+    Service-->>Controller: Zoning
+    Controller-->>User: 201 Created
 ```
 
 ## 7. Manage a personalized zoning (F4)
@@ -527,40 +434,24 @@ a personal zoning.
 sequenceDiagram
     actor User
     participant Controller as ZoneController
-    participant AuthSvc as AuthService
-    participant ZoneSvc as ZoneService
-    participant ZoneDao as GeoZoneDao
+    participant Service as ZoneService
+    participant DAO as DAO layer
     participant DB as Database
 
     User->>Controller: PATCH / DELETE /user/zones/{id}
-    Controller->>AuthSvc: authenticate(credentials)
-    AuthSvc-->>Controller: User
+    Controller->>Service: get_zoning(id) for owner
+    Service->>DAO: find_zone(id)
+    DAO->>DB: SELECT zoning
+    DB-->>Service: Zoning
 
-    alt Authentication failed
-        Controller-->>User: 401 Unauthorized
-    else Authenticated
-        Controller->>ZoneSvc: get_zoning(id)
-        ZoneSvc->>ZoneDao: find_zone(id)
-        ZoneDao->>DB: SELECT zoning
-        DB-->>ZoneDao: zoning
-        ZoneDao-->>ZoneSvc: Zoning
-
-        alt Zoning not found or not owned by user
-            ZoneSvc-->>Controller: forbidden
-            Controller-->>User: 404 / 403
-        else Update zoning
-            ZoneSvc->>ZoneDao: update(Zoning)
-            ZoneDao->>DB: UPDATE zoning / links
-            DB-->>ZoneDao: ok
-            ZoneSvc-->>Controller: updated Zoning
-            Controller-->>User: 200 OK
-        else Delete zoning
-            ZoneSvc->>ZoneDao: delete(id)
-            ZoneDao->>DB: DELETE zoning
-            DB-->>ZoneDao: ok
-            ZoneSvc-->>Controller: deleted
-            Controller-->>User: 204 No Content
-        end
+    alt Update
+        Service->>DAO: update(Zoning)
+        DAO->>DB: UPDATE zoning / links
+        Controller-->>User: 200 OK
+    else Delete
+        Service->>DAO: delete(id)
+        DAO->>DB: DELETE zoning
+        Controller-->>User: 204 No Content
     end
 ```
 
@@ -608,31 +499,17 @@ zoning (same persistence path as F4).
 sequenceDiagram
     actor User
     participant Controller as ZoneController
-    participant AuthSvc as AuthService
-    participant ZoneSvc as ZoneService
-    participant ZoneDao as GeoZoneDao
+    participant Service as ZoneService
+    participant DAO as DAO layer
     participant DB as Database
 
-    User->>Controller: POST /user/zones/import (CSV or JSON file)
-    Controller->>AuthSvc: authenticate(credentials)
-    AuthSvc-->>Controller: authenticated User?
-
-    alt Authentication failed
-        Controller-->>User: 401 Unauthorized
-    else User is authenticated
-        Controller->>ZoneSvc: import_zoning(user, file)
-        ZoneSvc->>ZoneSvc: Parse file and resolve municipalities
-
-        alt Invalid format or unknown communes
-            ZoneSvc-->>Controller: error
-            Controller-->>User: 400 Bad Request
-        else Valid file
-            ZoneSvc->>ZoneDao: save(Zoning)
-            ZoneDao->>DB: INSERT zoning and municipality links
-            DB-->>ZoneDao: zoning id
-            ZoneDao-->>ZoneSvc: Zoning
-            ZoneSvc-->>Controller: Zoning
-            Controller-->>User: 201 Created zoning
-        end
-    end
+    User->>Controller: POST /user/zones/import (CSV or JSON)
+    Controller->>Service: import_zoning(user, file)
+    Service->>Service: Parse file and resolve municipalities
+    Service->>DAO: save(Zoning)
+    DAO->>DB: INSERT zoning and links
+    DB-->>DAO: zoning id
+    DAO-->>Service: Zoning
+    Service-->>Controller: Zoning
+    Controller-->>User: 201 Created
 ```

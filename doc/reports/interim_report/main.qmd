@@ -159,27 +159,27 @@ Les fonctionnalités optionnelles de l'application sont :
 - Mise en forme des résultats sous différents formats
 - Importer des zonages à partir de fichiers csv, json
 
-## Questionnement et choix 
+## Questionnement et choix
 
 La mise en place de l’architecture et du moteur de calcul a nécessité de répondre à plusieurs problématiques techniques et méthodologiques dès la phase de conception. Celles-ci concernent l’authentification des utilisateurs, le stockage et le format des données massives, les méthodes géométriques d’estimation des températures, ainsi que les stratégies de mise en cache.
 
-Le premier questionnement a porté sur la gestion des droits et l’accès à l’API : fallait-il concevoir une application totalement ouverte ou intégrer un système de comptes authentifiés ? Contrairement aux fonctionnalités de consultation pure des DJU (ponctuels ou par divisions administratives standard comme les départements et régions) qui doivent rester accessibles de manière directe, le cahier des charges impose de permettre à un utilisateur de sauvegarder ses propres découpages territoriaux. Nous avons donc arbitré en faveur d'un système à double niveau :  
+Le premier questionnement a porté sur la gestion des droits et l’accès à l’API : fallait-il concevoir une application totalement ouverte ou intégrer un système de comptes authentifiés ? Contrairement aux fonctionnalités de consultation pure des DJU (ponctuels ou par divisions administratives standard comme les départements et régions) qui doivent rester accessibles de manière directe, le cahier des charges impose de permettre à un utilisateur de sauvegarder ses propres découpages territoriaux. Nous avons donc arbitré en faveur d'un système à double niveau :
 
- - Un accès public ("visiteur") : permettant d'effectuer un calcul ponctuel (coordonnées GPS) ou territorial standard sans contrainte d'authentification.  
+- Un accès public ("visiteur") : permettant d'effectuer un calcul ponctuel (coordonnées GPS) ou territorial standard sans contrainte d'authentification.
 
- - Un accès authentifié ("utilisateur enregistré") : permettant à l'utilisateur de créer, consulter, modifier et supprimer ses zonages personnalisés sans interférer avec les données des autres usagers.  
- 
+- Un accès authentifié ("utilisateur enregistré") : permettant à l'utilisateur de créer, consulter, modifier et supprimer ses zonages personnalisés sans interférer avec les données des autres usagers.
+
 Le second questionnement a concerné l’ingestion et la persistance des relevés de température issus de Météo-France. Les fichiers sources départementaux représentent un volume considérable de données compressées au format CSV. L'utilisation directe de ces fichiers bruts à chaque requête aurait provoqué des temps de latence.
 
-Pour les données de référence géographiques et la gestion des comptes/zonages utilisateurs, nous avons opté pour une base de données relationnelle SQL (accessible via notre couche DAO), garantissant l'intégrité référentielle des communes et des utilisateurs.  Pour les séries temporelles de températures, la conversion vers un format analytique optimisé (fichiers Parquet indexés par station et par date) a été privilégiée pour accélérer les opérations de filtrage temporel et de jointures spatiales.  
+Pour les données de référence géographiques et la gestion des comptes/zonages utilisateurs, nous avons opté pour une base de données relationnelle SQL (accessible via notre couche DAO), garantissant l'intégrité référentielle des communes et des utilisateurs. Pour les séries temporelles de températures, la conversion vers un format analytique optimisé (fichiers Parquet indexés par station et par date) a été privilégiée pour accélérer les opérations de filtrage temporel et de jointures spatiales.
 
 De plus, ces jeux de données comportent des valeurs manquantes. Nous avons décidé d'appliquer une interpolation temporelle locale sur les relevés immédiatement voisins pour combler des absences ponctuelles quand cela sera possible.
- 
-Il est rare de disposer d'une station météo sur place pour évaluer la température en un point donné. Le calcul nécessite donc d'interpoler les valeurs mesurées par les stations environnantes.  
+
+Il est rare de disposer d'une station météo sur place pour évaluer la température en un point donné. Le calcul nécessite donc d'interpoler les valeurs mesurées par les stations environnantes.
 
 Les coordonnées étant fournies sous forme de latitude et longitude, nous utiliserons la méthode d'Haversine pour calculer les distances. Ensuite, la méthode de pondération inverse des distances a été choisie pour affecter un poids prépondérant aux stations les plus proches. Enfin, pour respecter la réalité physique du climat, nous avons intégré la correction altimétrique standard préconisée, consistant à soustraire 0,65 °C par tranche de 100 mètres d'élévation entre les stations et le point cible.
 
-Enfin, le dernier point critique concerne le coût en calcul des agrégations géographiques. Calculer les DJU d'une région ou d'un département implique d'estimer les DJU de chaque commune membre, puis de pondérer ces valeurs par la population communale respective. Répéter cette série de calculs pour des requêtes identiques sur les mêmes périodes aurait saturé le serveur.  Nous avons donc fait le choix de concevoir un mécanisme de cache et de persistance des résultats intermédiaires : les températures quotidiennes interpolées par commune ainsi que les agrégations annuelles ou mensuelles standard sont conservées après leur premier calcul, transformant les requêtes ultérieures en de simples lectures optimisées en base de données.  
+Enfin, le dernier point critique concerne le coût en calcul des agrégations géographiques. Calculer les DJU d'une région ou d'un département implique d'estimer les DJU de chaque commune membre, puis de pondérer ces valeurs par la population communale respective. Répéter cette série de calculs pour des requêtes identiques sur les mêmes périodes aurait saturé le serveur. Nous avons donc fait le choix de concevoir un mécanisme de cache et de persistance des résultats intermédiaires : les températures quotidiennes interpolées par commune ainsi que les agrégations annuelles ou mensuelles standard sont conservées après leur premier calcul, transformant les requêtes ultérieures en de simples lectures optimisées en base de données.
 
 ## Description des fonctionnalités
 
@@ -211,7 +211,7 @@ Le diagramme des cas d'utilisation identifie trois profils. L'utilisateur anonym
 
 Les diagrammes d'activité décrivent l'enchaînement des traitements métier, sans entrer dans le détail des couches logicielles. Ils couvrent l'initialisation des données, l'estimation des températures, le calcul des DJU et la gestion des zonages.
 
-L'initialisation des bases de données (figure~\ref{fig:act-init}) charge les fichiers de températures Météo-France par département, filtre les colonnes utiles et les dates à partir de 1990, déduplique les relevés, puis enregistre les stations et les observations quotidiennes. Le référentiel des communes est ensuite téléchargé, enrichi en altitude et structuré en départements et régions. L'estimation des températures locales (figure~\ref{fig:act-temp}) sélectionne les stations les plus proches, applique éventuellement une correction d'altitude, puis interpole les séries quotidiennes par pondération inverse de la distance (IDW).
+L'initialisation des bases de données (figure\~\ref{fig:act-init}) charge les fichiers de températures Météo-France par département, filtre les colonnes utiles et les dates à partir de 1990, déduplique les relevés, puis enregistre les stations et les observations quotidiennes. Le référentiel des communes est ensuite téléchargé, enrichi en altitude et structuré en départements et régions. L'estimation des températures locales (figure\~\ref{fig:act-temp}) sélectionne les stations les plus proches, applique éventuellement une correction d'altitude, puis interpole les séries quotidiennes par pondération inverse de la distance (IDW).
 
 \begin{figure}[H]
 \centering
@@ -229,7 +229,7 @@ L'initialisation des bases de données (figure~\ref{fig:act-init}) charge les fi
 \end{minipage}
 \end{figure}
 
-Le calcul d'un DJU ponctuel (figure~\ref{fig:act-point}) part d'une requête sur des coordonnées GPS. Après validation des paramètres, un résultat déjà calculé peut être réutilisé ; sinon les températures quotidiennes sont estimées, les DJU de chauffage (et éventuellement de climatisation) sont obtenus jour par jour, puis agrégés selon le pas de temps demandé. Le calcul d'un DJU zonal (figure~\ref{fig:act-zone}) charge d'abord le territoire et ses communes. Les zonages officiels sont publics, tandis qu'un zonage personnalisé n'est accessible qu'à son propriétaire. Les DJU communaux sont ensuite agrégés, par exemple en les pondérant par la population.
+Le calcul d'un DJU ponctuel (figure\~\ref{fig:act-point}) part d'une requête sur des coordonnées GPS. Après validation des paramètres, un résultat déjà calculé peut être réutilisé ; sinon les températures quotidiennes sont estimées, les DJU de chauffage (et éventuellement de climatisation) sont obtenus jour par jour, puis agrégés selon le pas de temps demandé. Le calcul d'un DJU zonal (figure\~\ref{fig:act-zone}) charge d'abord le territoire et ses communes. Les zonages officiels sont publics, tandis qu'un zonage personnalisé n'est accessible qu'à son propriétaire. Les DJU communaux sont ensuite agrégés, par exemple en les pondérant par la population.
 
 \begin{figure}[H]
 \centering
@@ -247,7 +247,7 @@ Le calcul d'un DJU ponctuel (figure~\ref{fig:act-point}) part d'une requête sur
 \end{minipage}
 \end{figure}
 
-La consultation des zonages (figure~\ref{fig:act-consult}) permet de lister les départements, les régions ou l'ensemble des zonages officiels. La création ou l'import d'un zonage personnalisé (figure~\ref{fig:act-create}) exige une authentification : l'utilisateur fournit une liste de communes ou un fichier CSV / JSON, que l'application contrôle avant d'enregistrer le zonage.
+La consultation des zonages (figure\~\ref{fig:act-consult}) permet de lister les départements, les régions ou l'ensemble des zonages officiels. La création ou l'import d'un zonage personnalisé (figure\~\ref{fig:act-create}) exige une authentification : l'utilisateur fournit une liste de communes ou un fichier CSV / JSON, que l'application contrôle avant d'enregistrer le zonage.
 
 \begin{figure}[H]
 \centering
@@ -265,7 +265,7 @@ La consultation des zonages (figure~\ref{fig:act-consult}) permet de lister les 
 \end{minipage}
 \end{figure}
 
-La gestion d'un zonage personnalisé (figure~\ref{fig:act-manage}) est réservée au propriétaire. Après authentification, celui-ci peut modifier la description et la composition communale du zonage, ou le supprimer.
+La gestion d'un zonage personnalisé (figure\~\ref{fig:act-manage}) est réservée au propriétaire. Après authentification, celui-ci peut modifier la description et la composition communale du zonage, ou le supprimer.
 
 \begin{figure}[H]
 \centering
@@ -286,13 +286,13 @@ Le diagramme de classes structure le domaine de l'application. `GeographicZone` 
 
 ## Diagramme de séquence
 
-Les diagrammes de séquence décrivent les échanges entre le client, les couches de l'API (contrôleur, service, DAO) et la base de données. Ils couvrent les fonctionnalités F0 à F4, ainsi que l'import optionnel d'un zonage (FO3).
+Les diagrammes de séquence résument les échanges principaux entre le client, les couches de l'API (contrôleur, service, DAO) et la base de données. Ils couvrent les fonctionnalités F0 à F4, ainsi que l'import optionnel d'un zonage (FO3).
 
-L'administrateur déclenche l'initialisation des bases (F0). Les scripts d'alimentation téléchargent les fichiers de températures Météo-France, les filtrent et les enregistrent, puis construisent le référentiel géographique à partir de geo.api.gouv.fr et d'une API d'altimétrie.
+L'administrateur déclenche l'initialisation des bases (F0). Les scripts d'alimentation récupèrent les températures Météo-France et le référentiel géographique auprès des sources externes, puis les enregistrent via la couche DAO.
 
 ![Initialisation des bases de données (F0)](resources/diagrams/sequence_diagram_1.png){fig-align="center" width="100%" fig-pos="H"}
 
-Un client, anonyme ou authentifié, demande un DJU ponctuel (F1) pour des coordonnées GPS, une période et un pas de temps. Si un résultat comparable est déjà stocké, il est renvoyé directement ; sinon les températures sont interpolées à partir des stations voisines avant le calcul et la sauvegarde des DJU.
+Un client demande un DJU ponctuel (F1). Si un résultat comparable est déjà en cache, il est renvoyé ; sinon le service estime les températures (IDW, correction d'altitude), calcule les DJU et les enregistre.
 
 ![Calcul d'un DJU ponctuel (F1)](resources/diagrams/sequence_diagram_2.png){fig-align="center" width="100%" fig-pos="H"}
 
@@ -300,23 +300,23 @@ Tout client peut consulter les zonages publics (F2) : départements et régions,
 
 ![Consultation des zonages publics (F2)](resources/diagrams/sequence_diagram_3.png){fig-align="center" width="100%" fig-pos="H"}
 
-Le calcul d'un DJU zonal (F3) s'applique à un département, une région ou un zonage personnalisé. Les zonages officiels sont accessibles sans authentification ; un zonage personnel n'est calculable que par son propriétaire. Les DJU communaux sont ensuite agrégés sur le territoire.
+Le calcul d'un DJU zonal (F3) s'applique à un département, une région ou un zonage personnalisé (authentification requise pour un zonage personnel). Les DJU communaux sont agrégés sur le territoire, avec réutilisation du cache lorsque possible.
 
 ![Calcul d'un DJU zonal (F3)](resources/diagrams/sequence_diagram_4.png){fig-align="center" width="100%" fig-pos="H"}
 
-L'authentification précède toute opération sur les zonages personnels (F4). L'API vérifie l'identifiant et le mot de passe, puis ouvre une session en cas de succès, ou renvoie une erreur 401 sinon.
+L'authentification précède toute opération sur les zonages personnels (F4). L'API vérifie les identifiants, puis ouvre une session.
 
 ![Authentification d'un utilisateur](resources/diagrams/sequence_diagram_5.png){fig-align="center" width="100%" fig-pos="H"}
 
-Un utilisateur authentifié crée un zonage personnalisé (F4) en envoyant une description et une liste de communes. L'application vérifie que toutes les communes existent avant d'enregistrer le zonage.
+Un utilisateur authentifié crée un zonage personnalisé (F4) en envoyant une description et une liste de communes. Après validation, le zonage est enregistré.
 
 ![Création d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_6.png){fig-align="center" width="100%" fig-pos="H"}
 
-Le propriétaire peut ensuite modifier la description ou la composition d'un zonage, ou le supprimer. Les tentatives sur un zonage inexistant ou appartenant à un tiers sont rejetées (404 ou 403).
+Le propriétaire peut ensuite modifier la description ou la composition d'un zonage, ou le supprimer.
 
 ![Gestion d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_7.png){fig-align="center" width="100%" fig-pos="H"}
 
-Enfin, l'import optionnel (FO3) permet de constituer un zonage à partir d'un fichier CSV ou JSON. Après authentification, le fichier est analysé, les communes sont résolues, puis le zonage est enregistré selon le même chemin que la création manuelle.
+Enfin, l'import optionnel (FO3) constitue un zonage à partir d'un fichier CSV ou JSON : le fichier est analysé, les communes sont résolues, puis le zonage est enregistré comme pour une création manuelle.
 
 ![Import d'un zonage depuis un fichier (FO3)](resources/diagrams/sequence_diagram_8.png){fig-align="center" width="100%" fig-pos="H"}
 
@@ -328,55 +328,32 @@ Afin de structurer efficacement notre projet, nous avons opté pour une architec
 
 # Fonctionnalités de l'API
 
-Cette section présente la surface fonctionnelle exposée par l'API, c'est-à-dire la manière
-dont un client externe consomme les fonctionnalités décrites dans le cahier des charges
-et modélisées dans la section 2 (Modélisation UML). Le détail technique des formats de
-requête et de réponse (schémas JSON, codes d'erreur exhaustifs) fera l'objet d'une
-spécification dédiée (annexe ou documentation OpenAPI) et n'est pas repris ici.
+Cette section présente la surface fonctionnelle exposée par l'API, c'est-à-dire la manière dont un client externe consomme les fonctionnalités décrites dans le cahier des charges et modélisées dans la section 2 (Modélisation UML). Le détail technique des formats de requête et de réponse (schémas JSON, codes d'erreur exhaustifs) fera l'objet d'une spécification dédiée (annexe ou documentation OpenAPI) et n'est pas repris ici.
 
 ## Architecture générale
 
-Chaque route HTTP est prise en charge par un *contrôleur* (`DjuController`,
-`ZoneController`, `UserController`), qui valide la requête puis délègue le traitement
-métier à une couche de *services* (`DjuService`, `ZoneService`, `AuthService`,
-`TemperatureService`), comme le montrent les diagrammes de séquence (figures 2.10 à
-2.17). Ces services orchestrent les objets métier du diagramme de classes : en
-particulier `DjuCalculation.run()`, qui pilote l'estimation des températures puis le
-calcul et l'agrégation des DJU, et `GeographicZone`/`Zoning`, qui exposent la liste des
-communes d'un territoire via `get_municipalities()` et s'appuient sur la couche DAO
-pour la persistance.
+Chaque route HTTP est prise en charge par un *contrôleur* (`DjuController`, `ZoneController`, `UserController`), qui valide la requête puis délègue le traitement métier à une couche de *services* (`DjuService`, `ZoneService`, `AuthService`, `TemperatureService`), comme le montrent les diagrammes de séquence (figures 2.10 à 2.17). Ces services orchestrent les objets métier du diagramme de classes : en particulier `DjuCalculation.run()`, qui pilote l'estimation des températures puis le calcul et l'agrégation des DJU, et `GeographicZone`/`Zoning`, qui exposent la liste des communes d'un territoire via `get_municipalities()` et s'appuient sur la couche DAO pour la persistance.
 
 ## Accès public
 
 Sans authentification, un client peut :
 
 - calculer un DJU ponctuel à partir de coordonnées GPS (F1) ;
-- consulter les zonages officiels (départements et régions) et les communes
-  qui les composent (F2) ;
+- consulter les zonages officiels (départements et régions) et les communes qui les composent (F2) ;
 - calculer un DJU sur un zonage officiel (F3).
 
 ## Espace utilisateur authentifié
 
-Après création d'un compte et authentification, un utilisateur accède en plus à la
-gestion de ses zonages personnalisés (F4) : création, consultation, modification et
-suppression, ainsi que le calcul de DJU sur ces zonages. Ces opérations s'appuient sur
-`User.create_zoning()` et sur les méthodes `add_municipality()` / `remove_municipality()`
-de `Zoning`. L'import d'un zonage depuis un fichier CSV ou JSON (FO3) suit le même
-chemin que la création manuelle, une fois les communes du fichier résolues.
+Après création d'un compte et authentification, un utilisateur accède en plus à la gestion de ses zonages personnalisés (F4) : création, consultation, modification et suppression, ainsi que le calcul de DJU sur ces zonages. Ces opérations s'appuient sur `User.create_zoning()` et sur les méthodes `add_municipality()` / `remove_municipality()` de `Zoning`. L'import d'un zonage depuis un fichier CSV ou JSON (FO3) suit le même chemin que la création manuelle, une fois les communes du fichier résolues.
 
 ## Persistance et mise en forme des résultats
 
-Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est
-transparent pour le client mais persisté côté serveur (FO1) : une requête portant sur des
-paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer
-l'estimation des températures et l'agrégation, capacité déjà présente au niveau métier
-via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est
-négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
+Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est transparent pour le client mais persisté côté serveur (FO1) : une requête portant sur des paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer l'estimation des températures et l'agrégation, capacité déjà présente au niveau métier via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
 
 ## Synthèse
 
 | Fonct. | Route | Authentification | Description |
-|---|---|---|---|
+|------------------|------------------|------------------|------------------|
 | F1 | `POST /dju/point` | Optionnelle | Calcul DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | Liste des zonages officiels et de leurs communes |
 | F3 | `POST /dju/zone` | Optionnelle¹ | Calcul DJU sur un territoire |
@@ -391,9 +368,6 @@ négociable au niveau du format de sortie (JSON par défaut), sans route dédié
 | FO3 | `POST /user/zones/import` | Requise | Import d'un zonage depuis un fichier CSV/JSON |
 
 ¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé.
-
-
-
 
 # Conclusion Intermédiaire
 
