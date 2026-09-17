@@ -338,10 +338,10 @@ Chaque route HTTP est prise en charge par un *contrôleur* (`DjuController`,
 `ZoneController`, `UserController`), qui valide la requête puis délègue le traitement
 métier à une couche de *services* (`DjuService`, `ZoneService`, `AuthService`,
 `TemperatureService`), comme le montrent les diagrammes de séquence (figures 2.10 à
-2.17). Ces services orchestrent les objets métier du diagramme de classes — en
+2.17). Ces services orchestrent les objets métier du diagramme de classes : en
 particulier `DjuCalculation.run()`, qui pilote l'estimation des températures puis le
 calcul et l'agrégation des DJU, et `GeographicZone`/`Zoning`, qui exposent la liste des
-communes d'un territoire via `get_municipalities()` — et s'appuient sur la couche DAO
+communes d'un territoire via `get_municipalities()` et s'appuient sur la couche DAO
 pour la persistance.
 
 ## 3.2 Accès public
@@ -349,7 +349,7 @@ pour la persistance.
 Sans authentification, un client peut :
 
 - calculer un DJU ponctuel à partir de coordonnées GPS (F1) ;
-- consulter les zonages officiels — départements et régions — et les communes
+- consulter les zonages officiels (départements et régions) et les communes
   qui les composent (F2) ;
 - calculer un DJU sur un zonage officiel (F3).
 
@@ -367,7 +367,7 @@ chemin que la création manuelle, une fois les communes du fichier résolues.
 Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est
 transparent pour le client mais persisté côté serveur (FO1) : une requête portant sur des
 paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer
-l'estimation des températures et l'agrégation — capacité déjà présente au niveau métier
+l'estimation des températures et l'agrégation, capacité déjà présente au niveau métier
 via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est
 négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
 
