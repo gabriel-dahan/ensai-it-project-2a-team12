@@ -191,9 +191,13 @@ L’application propose également une dimension d’agrégation territoriale. E
 
 Enfin, pour offrir un service modulable et adapté aux besoins métiers, un espace utilisateur authentifié est intégré. Il permet à un utilisateur de concevoir, sauvegarder et administrer ses propres zonages territoriaux sur mesure (regroupements spécifiques de communes, territoires de contrats de transition écologique, zones d'études privées), afin de pouvoir relancer des calculs récurrents sur ces périmètres sans avoir à redéfinir la liste des communes à chaque requête.
 
-## Organisation du groupe
+
 
 ## Organisation du travail
+
+L’application sera développée en Python. Nous utiliserons PostgreSQL pour gérer la base de données de l’application. Enfin, pour simplifier la coordination du développement, nous utilisons github.  
+
+
 
 ...
 
