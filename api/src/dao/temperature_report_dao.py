@@ -24,11 +24,8 @@ class TemperatureReportDao(metaclass=Singleton):
         Returns:
             List[TemperatureReport]: A list of TemperatureReport objects.
         """
-        # Step 1: We get the connection using the DBConnection class.
         with DBConnection().connection as connection:
-            # Step 2: From the connection, we create a cursor for the query.
             with connection.cursor() as cursor:
-                # Step 3: We execute our SQL query with parameters to prevent injection.
                 query = """
                     SELECT id, station_id, date, temp_min, temp_max, temp_mean 
                     FROM temperature_reports 
@@ -37,11 +34,9 @@ class TemperatureReportDao(metaclass=Singleton):
                 """
                 cursor.execute(query, (station_id, start_date, end_date))
 
-                # Step 4: We store the query result.
                 res = cursor.fetchall()
 
         if res:
-            # Step 5: We format the results into the desired shape (list of TemperatureReport objects).
             return [
                 TemperatureReport(
                     id=row["id"],

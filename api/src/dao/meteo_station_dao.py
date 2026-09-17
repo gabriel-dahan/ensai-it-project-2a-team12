@@ -19,18 +19,13 @@ class MeteoStationDao(metaclass=Singleton):
         Returns:
             List[MeteoStation]: A list of all MeteoStation objects.
         """
-        # Step 1: We get the connection using the DBConnection class.
         with DBConnection().connection as connection:
-            # Step 2: From the connection, we create a cursor for the query.
             with connection.cursor() as cursor:
-                # Step 3: We execute our SQL query.
                 cursor.execute("SELECT id, station_code, name, latitude, longitude, altitude FROM meteo_stations")
 
-                # Step 4: We store the query result.
                 res = cursor.fetchall()
 
         if res:
-            # Step 5: We format the results into the desired shape (list of MeteoStation objects).
             return [
                 MeteoStation(
                     id=row["id"],
@@ -128,7 +123,6 @@ class MeteoStationDao(metaclass=Singleton):
         if not res:
             return []
 
-        # Step 5: Format and sort results by distance
         stations = [
             MeteoStation(
                 id=row["id"],
