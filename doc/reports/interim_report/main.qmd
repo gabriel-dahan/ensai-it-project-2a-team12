@@ -199,18 +199,6 @@ Pour le comblement des trous temporels, la stratégie s'affine selon la durée d
 
 Enfin, chaque résultat inclura un rapport de qualité : pourcentage de jours avec données originales, proportion de jours interpolés vs. spatialisés vs. rejetés. Ces métadonnées permettront à l'utilisateur de juger la fiabilité de son DJU. Cette méthodologie sera consolidée et potentiellement affinée lors de la mise en pratique de ces méthodes et de leurs tests.
 
-<<<<<<< HEAD
-## Gestion des données manquantes
-
-Le traitement des données manquantes est un sujet important du projet car les fichiers Météo-France bruts comportent parfois d'importantes périodes sans données. Tout d'abord, les antennes couvrant moins de 65 % de la période d'intérêt sont écartées tout comme les doublons spatiaux distants de moins de 500 mètres (on conserve la plus complète). On détecte aussi les anomalies évidentes telle que des températures constante sur 30 jours ou des valeurs extrêmes physiquement impossibles et on élimine ces séries.
-
-Pour le comblement des trous temporels, la stratégie s'affine selon la durée du gap et repose sur l'exploitation combinée de l'information locale et spatiale. Pour les absences de 1 à 2 jours, interpolation linéaire simple. Entre 3 et 7 jours, on fait une interpolation hybride : on calcule d'abord une interpolation linéaire basique (tendance locale entre j−1 et j+1), puis simultanément on récupère les observations réelles des 3 à 5 antennes spatiales les plus proches sur la même période. On fusionne les deux sources en pondérant 70 % la tendance locale et 30 % la moyenne des antennes voisines, ce qui donne une courbe moins rigide qu'une droite droite tout en restant ancrée dans la variabilité régionale réelle. Pour les gaps plus longs, de 7 à 30 jours, on utilise une régression linéaire multi-station : sur la période où les données de la station cible sont intactes, on estime une relation linéaire entre la station cible et ses voisines proches (typiquement T_cible = a × T_proche_A + b × T_proche_B + c × T_proche_C). On fit les coefficients (a, b, c) sur les données complètes, ce qui capture comment la station co-varie réellement avec son environnement spatial. Pendant le gap, on applique cette relation aux observations réelles des antennes proches pour prédire la station cible. Optionnellement, si plusieurs années historiques sont disponibles, on peut ajouter une correction saisonnière en calculant l'anomalie moyenne (écart station-région) pour la même période calendaire les années antérieures. Les gaps dépassant 30 jours restent rejetés : au-delà, aucune méthode statistique fiable ne compense l'absence totale d'information.
-
-Enfin, chaque résultat inclura un rapport de qualité : pourcentage de jours avec données originales, proportion de jours interpolés vs. spatialisés vs. rejetés. Ces métadonnées permettront à l'utilisateur de juger la fiabilité de son DJU. Cette méthodologie sera consolidée et potentiellement affinée lors de la mise en pratique de ces méthodes et de leurs tests.
-
-
-=======
->>>>>>> 1452a3645139ddf0262debd0db483b6ea984f0ca
 ## Organisation du travail
 
 L’application sera développée en Python. Nous utiliserons PostgreSQL pour gérer la base de données de l’application. Enfin, pour simplifier la coordination du développement, nous utilisons github.
