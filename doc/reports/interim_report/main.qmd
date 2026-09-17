@@ -191,13 +191,9 @@ L’application propose également une dimension d’agrégation territoriale. E
 
 Enfin, pour offrir un service modulable et adapté aux besoins métiers, un espace utilisateur authentifié est intégré. Il permet à un utilisateur de concevoir, sauvegarder et administrer ses propres zonages territoriaux sur mesure (regroupements spécifiques de communes, territoires de contrats de transition écologique, zones d'études privées), afin de pouvoir relancer des calculs récurrents sur ces périmètres sans avoir à redéfinir la liste des communes à chaque requête.
 
-
-
 ## Organisation du travail
 
-L’application sera développée en Python. Nous utiliserons PostgreSQL pour gérer la base de données de l’application. Enfin, pour simplifier la coordination du développement, nous utilisons github.  
-
-
+L’application sera développée en Python. Nous utiliserons PostgreSQL pour gérer la base de données de l’application. Enfin, pour simplifier la coordination du développement, nous utilisons github.
 
 ...
 
@@ -291,6 +287,10 @@ Cette section présente les fonctionnalités exposée par l'API et la manière d
 
 Chaque route HTTP est prise en charge par un contrôleur (`DjuController`, `ZoneController`, `UserController`), qui valide la requête puis délègue le traitement métier à une couche de services (`DjuService`, `ZoneService`, `AuthService`, `TemperatureService`), comme le montrent les diagrammes de séquence. Ces services orchestrent les objets métier du diagramme de classes : en particulier `DjuCalculation.run()`, qui pilote l'estimation des températures puis le calcul et l'agrégation des DJU, et `GeographicZone`/`Zoning`, qui exposent la liste des communes d'un territoire via `get_municipalities()` et s'appuient sur la couche DAO pour la persistance.
 
+Le fichier principal de l'application sert de point d'entrée à l'API : c'est lui qui enregistre les différents contrôleurs. Quand une requête HTTP arrive, on commence par valider les données reçues à l'aide de schémas dédiés, avant de les transmettre au contrôleur concerné. Ce dernier ne traite pas lui-même la logique métier, il la délègue à la couche de services, qui se charge des calculs et, si besoin, dialogue avec la couche d'accès aux données.
+
+Cette organisation en couches distinctes (gestion des requêtes, validation, logique métier, persistance) rend le code plus facile à maintenir et à faire évoluer dans le temps.
+
 ## Accès public
 
 Sans authentification, un client peut :
@@ -329,7 +329,6 @@ Conformément au choix de conception décrit en section 1.2, chaque calcul de DJ
 # Conclusion Intermédiaire {.unnumbered}
 
 ...
-
 
 \appendix
 
