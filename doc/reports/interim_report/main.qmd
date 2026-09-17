@@ -336,7 +336,13 @@ Conformément au choix de conception décrit en section 1.2, chaque calcul de DJ
 
 # Conclusion Intermédiaire {.unnumbered}
 
-...
+Ce rapport d'étape formalise les choix architecturaux et fonctionnels retenus pour développer une API de calcul de Degré Jour Unifié. La conception proposée satisfait l'ensemble du cahier des charges en proposant une double couche d'accès : une première sans authentification pour les consultations ponctuelles et les territoires standards, et une seconde réservée aux utilisateurs enregistrés pour la gestion de zonages personnalisés.
+
+L'architecture en couches garantit une séparation claire des responsabilités entre présentation, orchestration métier et persistance. Le choix stratégique de dualiser le stockage : SQL pour les données de référence et géométriques, fichiers Parquet pour les séries temporelles volumineuses—répond aux contraintes de performance et d'évolutivité du projet. La mise en œuvre d'un mécanisme de cache et de persistance des résultats intermédiaires anticipe les demandes récurrentes et transforme les requêtes en lectures optimisées, prévenant ainsi une surcharge du serveur.
+
+Les diagrammes de modélisation UML présentés esquissent le squelette logique du système. Les diagrammes de séquence détaillent les trois flux centraux (initialisation, calcul ponctuel, agrégation territoriale) et montrent comment la couche DAO abstrait les interactions avec les supports de persistance. Ces éléments structurent et clarifient les responsabilités de chaque module avant d'entrer dans la phase de développement itératif.
+
+Les étapes suivantes porteront sur l'implémentation effective de ces composants : création des schémas de base de données, développement des services de calcul et d'interpolation spatiale, mise en place du système d'authentification, et mise en œuvre des tests unitaires et d'intégration. Une attention particulière sera accordée à la robustesse du traitement des données manquantes et à la validation de la qualité des résultats numériques pour assurer la fiabilité de l'indicateur de consommation énergétique. La phase de tests en charge permettra de vérifier que l'architecture scalabilise correctement aux volumes de données réels. Enfin, la documentation des endpoints API et la rédaction d'un guide utilisateur concluront ce cycle de développement et prépareront le déploiement en environnement de production.
 
 \appendix
 
