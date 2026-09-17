@@ -305,7 +305,7 @@ Après création d'un compte et authentification, un utilisateur accède en plus
 
 ## Persistance et mise en forme des résultats
 
-Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est transparent pour le client mais persisté côté serveur (FO1) : une requête portant sur des paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer l'estimation des températures et l'agrégation, capacité déjà présente au niveau métier via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
+Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est transparent pour le client mais stocké de manière permanente côté serveur (FO1) : une requête portant sur des paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer l'estimation des températures et l'agrégation, capacité déjà présente au niveau métier via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
 
 ## Synthèse
 
