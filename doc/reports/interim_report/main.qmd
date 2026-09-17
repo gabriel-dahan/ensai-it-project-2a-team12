@@ -338,7 +338,7 @@ Conformément au choix de conception décrit en section 1.2, chaque calcul de DJ
 
 ¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé.
 
-# Conclusion Intermédiaire
+# Conclusion Intermédiaire {.unnumbered}
 
 Ce rapport d'étape formalise les choix architecturaux et fonctionnels retenus pour développer une API de calcul de Degré Jour Unifié. La conception proposée satisfait l'ensemble du cahier des charges en proposant une double couche d'accès : une première sans authentification pour les consultations ponctuelles et les territoires standards, et une seconde réservée aux utilisateurs enregistrés pour la gestion de zonages personnalisés.
 
