@@ -326,7 +326,7 @@ Conformément au choix de conception décrit en section 1.2, chaque calcul de DJ
 
 ¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé.
 
-# Conclusion Intermédiaire
+# Conclusion Intermédiaire {.unnumbered}
 
 ...
 
