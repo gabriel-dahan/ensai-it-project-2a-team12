@@ -324,11 +324,74 @@ Enfin, l'import optionnel (FO3) permet de constituer un zonage à partir d'un fi
 
 Afin de structurer efficacement notre projet, nous avons opté pour une architecture logicielle en couches qui garantit une nette séparation des responsabilités. La couche de présentation (Presentation Layer) expose l'API REST développée sous Python ; elle réceptionne les requêtes HTTP (calculs ponctuels, territoriaux ou gestion des zonages), valide les paramètres d'entrée et formate les réponses en JSON, CSV sans porter de logique métier. Elle transmet ces demandes à la couche de service (Service Layer), le cœur algorithmique de l'application, qui orchestre le calcul des DJU, l'interpolation spatiale IDW corrigée de l'altitude, l'authentification des utilisateurs et le contrôle préalable du cache pour éviter les recalculs redondants. Cette couche manipule des entités pivots définies dans la couche métier (Business Layer), telles que les stations météo, les communes ou les résultats de DJU. Enfin, les échanges avec les supports de persistance sont entièrement délégués à la couche d'accès aux données (DAO), qui abstrait à la fois l'interrogation de la base relationnelle SQL et la lecture des températures stockés aux formats Parquet. Enfin, un module de tests unitaires permet de vérifier la justesse de nos calculs et le bon fonctionnement de l'API.
 
-# Fonctionnalités de l'API
+# 3. Fonctionnalités de l'API
 
-(Ne pas insister sur l'API pour le rapport)
+Cette section présente la surface fonctionnelle exposée par l'API, c'est-à-dire la manière
+dont un client externe consomme les fonctionnalités décrites dans le cahier des charges
+et modélisées dans la section 2 (Modélisation UML). Le détail technique des formats de
+requête et de réponse (schémas JSON, codes d'erreur exhaustifs) fera l'objet d'une
+spécification dédiée (annexe ou documentation OpenAPI) et n'est pas repris ici.
 
-...
+## 3.1 Architecture générale
+
+Chaque route HTTP est prise en charge par un *contrôleur* (`DjuController`,
+`ZoneController`, `UserController`), qui valide la requête puis délègue le traitement
+métier à une couche de *services* (`DjuService`, `ZoneService`, `AuthService`,
+`TemperatureService`), comme le montrent les diagrammes de séquence (figures 2.10 à
+2.17). Ces services orchestrent les objets métier du diagramme de classes — en
+particulier `DjuCalculation.run()`, qui pilote l'estimation des températures puis le
+calcul et l'agrégation des DJU, et `GeographicZone`/`Zoning`, qui exposent la liste des
+communes d'un territoire via `get_municipalities()` — et s'appuient sur la couche DAO
+pour la persistance.
+
+## 3.2 Accès public
+
+Sans authentification, un client peut :
+
+- calculer un DJU ponctuel à partir de coordonnées GPS (F1) ;
+- consulter les zonages officiels — départements et régions — et les communes
+  qui les composent (F2) ;
+- calculer un DJU sur un zonage officiel (F3).
+
+## 3.3 Espace utilisateur authentifié
+
+Après création d'un compte et authentification, un utilisateur accède en plus à la
+gestion de ses zonages personnalisés (F4) : création, consultation, modification et
+suppression, ainsi que le calcul de DJU sur ces zonages. Ces opérations s'appuient sur
+`User.create_zoning()` et sur les méthodes `add_municipality()` / `remove_municipality()`
+de `Zoning`. L'import d'un zonage depuis un fichier CSV ou JSON (FO3) suit le même
+chemin que la création manuelle, une fois les communes du fichier résolues.
+
+## 3.4 Persistance et mise en forme des résultats
+
+Conformément au choix de conception décrit en section 1.2, chaque calcul de DJU est
+transparent pour le client mais persisté côté serveur (FO1) : une requête portant sur des
+paramètres déjà calculés renvoie directement le résultat en base plutôt que de relancer
+l'estimation des températures et l'agrégation — capacité déjà présente au niveau métier
+via `DjuCalculation.can_reuse_intermediate()`. La mise en forme des résultats (FO2) est
+négociable au niveau du format de sortie (JSON par défaut), sans route dédiée distincte.
+
+## 3.5 Synthèse
+
+| Fonct. | Route | Authentification | Description |
+|---|---|---|---|
+| F1 | `POST /dju/point` | Optionnelle | Calcul DJU sur un point GPS |
+| F2 | `GET /zones` | Aucune | Liste des zonages officiels et de leurs communes |
+| F3 | `POST /dju/zone` | Optionnelle¹ | Calcul DJU sur un territoire |
+| F4 | `POST /user/register` | Aucune | Création d'un compte |
+| F4 | `POST /user/login` | Aucune | Authentification, émission d'une session |
+| F4 | `GET /user/zones` | Requise | Liste des zonages de l'utilisateur |
+| F4 | `POST /user/zones` | Requise | Création d'un zonage personnalisé |
+| F4 | `PATCH /user/zones/{id}` | Requise (propriétaire) | Modification d'un zonage |
+| F4 | `DELETE /user/zones/{id}` | Requise (propriétaire) | Suppression d'un zonage |
+| FO1 | — | — | Résultats mis en cache automatiquement, réutilisés par F1/F3 |
+| FO2 | — | — | Format de sortie négociable (JSON par défaut) |
+| FO3 | `POST /user/zones/import` | Requise | Import d'un zonage depuis un fichier CSV/JSON |
+
+¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé.
+
+
+
 
 # Conclusion Intermédiaire
 
