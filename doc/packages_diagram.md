@@ -1,25 +1,25 @@
 ```mermaid
 graph TD
-    User([Utilisateur / Client]) --> PresentationLayer
+    User([User / Client]) --> PresentationLayer
 
-    subgraph Application ["Application en couches"]
-        PresentationLayer["Presentation Layer (API / Routes)<br/>- Points d'entree HTTP (FastAPI / Flask)<br/>- /dju/point, /dju/territoire, /zonages<br/>- Formats : JSON, CSV, GeoJSON"]
+    subgraph Application ["Layered Application"]
+        PresentationLayer["Presentation Layer (API / Routes)<br/>- HTTP endpoints (FastAPI / Flask)<br/>- /dju/point, /dju/territory, /zonings<br/>- Formats: JSON, CSV, GeoJSON"]
         
-        ServiceLayer["Service Layer<br/>- DJUService (calculs et agregations)<br/>- InterpolationService (IDW, Haversine, altitude)<br/>- ZonageService et AuthService"]
+        ServiceLayer["Service Layer<br/>- DJUService (calculations & aggregations)<br/>- InterpolationService (IDW, Haversine, altitude)<br/>- ZoningService & AuthService"]
         
-        BusinessLayer["Business Layer (Objets Metier)<br/>- Station, Commune, Departement<br/>- Region, Zonage, ReleveMeteo, DJU"]
+        BusinessLayer["Business Layer (Domain Objects)<br/>- Station, Municipality, Department<br/>- Region, Zoning, WeatherRecord, DJU"]
         
-        DAO["Data Access Object (DAO)<br/>- StationDAO et MeteoDAO<br/>- CommuneDAO et ZonageDAO<br/>- CacheDAO (resultats intermediaires)"]
+        DAO["Data Access Object (DAO)<br/>- StationDAO & WeatherDAO<br/>- MunicipalityDAO & ZoningDAO<br/>- CacheDAO (intermediate results)"]
 
         PresentationLayer <--> ServiceLayer
         ServiceLayer <--> BusinessLayer
         ServiceLayer <--> DAO
     end
 
-    SQL["Base SQL (PostgreSQL / SQLite)<br/>- Communes, departements, regions<br/>- Utilisateurs et zonages<br/>- Table de Cache DJU"]
-    DataFiles["Fichiers de donnees (Parquet / DuckDB)<br/>- Historique meteo Météo-France<br/>- Donnees altimetriques"]
-    DataGouv["Sources data.gouv.fr<br/>- Releves quotidiens Météo France<br/>- Decoupage administratif"]
-    Tests["Tests unitaires et integration"]
+    SQL["SQL Database (PostgreSQL / SQLite)<br/>- Municipalities, departments, regions<br/>- Users & custom zonings<br/>- DJU cache table"]
+    DataFiles["Data Files (Parquet / DuckDB)<br/>- Météo-France historical weather data<br/>- Elevation data"]
+    DataGouv["data.gouv.fr Sources<br/>- Météo-France daily records<br/>- Administrative boundaries"]
+    Tests["Unit Tests"]
 
     DAO <--> SQL
     DAO <--> DataFiles
@@ -28,3 +28,32 @@ graph TD
     Tests -.-> PresentationLayer
     Tests -.-> ServiceLayer
 ```
+
+graph TD
+    User([User / Client]) --> PresentationLayer
+
+    subgraph Application ["Layered Application"]
+        PresentationLayer["Presentation Layer (API / Routes)<br/>- HTTP endpoints (FastAPI / Flask)<br/>- /dju/point, /dju/territory, /zonings<br/>- Formats: JSON, CSV, GeoJSON"]
+        
+        ServiceLayer["Service Layer<br/>- DJUService (calculations & aggregations)<br/>- InterpolationService (IDW, Haversine, altitude)<br/>- ZoningService & AuthService"]
+        
+        BusinessLayer["Business Layer (Domain Objects)<br/>- Station, Municipality, Department<br/>- Region, Zoning, WeatherRecord, DJU"]
+        
+        DAO["Data Access Object (DAO)<br/>- StationDAO & WeatherDAO<br/>- MunicipalityDAO & ZoningDAO<br/>- CacheDAO (intermediate results)"]
+
+        PresentationLayer <--> ServiceLayer
+        ServiceLayer <--> BusinessLayer
+        ServiceLayer <--> DAO
+    end
+
+    SQL["SQL Database (PostgreSQL / SQLite)<br/>- Municipalities, departments, regions<br/>- Users & custom zonings<br/>- DJU cache table"]
+    DataFiles["Data Files (Parquet / DuckDB)<br/>- Météo-France historical weather data<br/>- Elevation data"]
+    DataGouv["data.gouv.fr Sources<br/>- Météo-France daily records<br/>- Administrative boundaries"]
+    Tests["Unit & Integration Tests"]
+
+    DAO <--> SQL
+    DAO <--> DataFiles
+    DAO -.-> DataGouv
+    
+    Tests -.-> PresentationLayer
+    Tests -.-> ServiceLayer
