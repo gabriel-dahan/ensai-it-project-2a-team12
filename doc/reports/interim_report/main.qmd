@@ -201,9 +201,9 @@ Enfin, chaque résultat inclura un rapport de qualité : pourcentage de jours av
 
 ## Organisation du travail
 
-L’application sera développée en Python. Nous utiliserons PostgreSQL pour gérer la base de données de l’application. Enfin, pour simplifier la coordination du développement, nous utilisons github.
+La coordination du développement s’appuie sur GitHub : le code est versionné sur un dépôt commun, et le suivi des tâches passe par les *issues*. Chaque fonctionnalité ou correctif est ainsi tracé et assigné au même endroit, ce qui clarifie les responsabilités et limite les doublons. Ce mode d’organisation fonctionne plutôt bien au sein du groupe : les priorités restent visibles pour tous et l’avancement est facile à suivre d’une séance à l’autre.
 
-...
+En complément, nous tenons un suivi hebdomadaire dans le dossier `doc/tracking/`. Chaque jeudi soir, un fichier dédié à la semaine en cours est renseigné : chacun y indique les tâches réalisées, et un backlog synthétise ce qu’il reste à faire (priorités et tâches secondaires). Ces bilans hebdomadaires complètent les *issues* GitHub en offrant une vue d’ensemble régulière de l’état du projet, avec les temps alloués à chaque feature et une certaine temporalité dans ce est fait ou doit être fait.
 
 # Modélisation UML
 
@@ -336,7 +336,7 @@ Conformément au choix de conception décrit en section 1.2, chaque calcul de DJ
 
 # Conclusion Intermédiaire {.unnumbered}
 
-Ce rapport d'étape formalise les choix architecturaux et fonctionnels retenus pour développer une API de calcul de Degré Jour Unifié. La conception proposée satisfait l'ensemble du cahier des charges en proposant une double couche d'accès : une première sans authentification pour les consultations ponctuelles et les territoires standards, et une seconde réservée aux utilisateurs enregistrés pour la gestion de zonages personnalisés.
+Ce rapport d'étape formalise les choix architecturaux et fonctionnels retenus pour développer cette API. La conception proposée satisfait l'ensemble du cahier des charges en proposant une double couche d'accès : une première sans authentification pour les consultations ponctuelles et les territoires standards, et une seconde réservée aux utilisateurs enregistrés pour la gestion de zonages personnalisés.
 
 L'architecture en couches garantit une séparation claire des responsabilités entre présentation, orchestration métier et persistance. Le choix stratégique de dualiser le stockage : SQL pour les données de référence et géométriques, fichiers Parquet pour les séries temporelles volumineuses—répond aux contraintes de performance et d'évolutivité du projet. La mise en œuvre d'un mécanisme de cache et de persistance des résultats intermédiaires anticipe les demandes récurrentes et transforme les requêtes en lectures optimisées, prévenant ainsi une surcharge du serveur.
 
