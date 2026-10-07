@@ -1,514 +1,247 @@
-# Sequence diagrams
+# Diagrammes de séquence
 
-These diagrams describe the main exchanges between the client, the API layers
-(controller, service, DAO) and the database. They follow the layered
-architecture of the project and cover the features F0 to F4, plus the optional
-import of custom zonings (FO3).
+Échanges entre le client, les couches de l'API (contrôleur, service, DAO)
+et la base de données. Couverture F0 à F4 et import optionnel FO3.
 
-## 1. Initialize the databases (F0)
+Thème Mermaid commun omis ici pour la lisibilité ; conserver le thème
+`base` clair lors de l'export PNG.
 
-The administrator loads Météo-France temperature records and the municipality
-referential (data.gouv.fr / geo.api.gouv.fr), then persists stations, daily
-reports and official zonings (municipality, department, region).
+## 1. Initialisation des bases de données (F0)
+
+L'administrateur charge les relevés Météo-France et le référentiel communal,
+puis persiste stations, observations et zonages officiels.
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
-    actor Admin
-    participant Init as Init scripts
-    participant Ext as External sources
-    participant DAO as DAO layer
-    participant DB as Database
+    actor Admin as Administrateur
+    participant Init as Scripts d'init
+    participant Ext as Sources externes
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
-    Admin->>Init: Start database initialization
+    Admin->>Init: Démarrer l'initialisation
 
-    Init->>Ext: Download Météo-France temperature files
-    Ext-->>Init: SYNOP records
-    Init->>Init: Filter, deduplicate from 1990
-    Init->>DAO: save_stations_and_reports(data)
-    DAO->>DB: INSERT stations and reports
+    Init->>Ext: Télécharger les fichiers Météo-France
+    Ext-->>Init: Relevés quotidiens
+    Init->>Init: Filtrer colonnes, dédupliquer (≥ 1990)
+    Init->>DAO: save_stations_and_reports(données)
+    DAO->>DB: INSERT stations et relevés
     DB-->>DAO: ok
 
-    Init->>Ext: Fetch communes, departments, regions + altitudes
-    Ext-->>Init: Geographic referential
+    Init->>Ext: Récupérer communes, départements, régions + altitudes
+    Ext-->>Init: Référentiel géographique
     Init->>DAO: save_zones(...)
-    DAO->>DB: INSERT official zonings
+    DAO->>DB: INSERT zonages officiels
     DB-->>DAO: ok
 
-    Init-->>Admin: Databases ready
+    Init-->>Admin: Bases prêtes
 ```
 
-## 2. Compute a punctual DJU (F1)
+## 2. Calcul d'un DJU ponctuel (F1)
 
-An anonymous or authenticated client requests heating / cooling DJU for GPS
-coordinates, over a period and a time step (daily, weekly, monthly, yearly).
-Cached results are reused when available (FO1). Otherwise temperatures are
-estimated from nearby stations (inverse distance weighting, optional altitude
-correction).
+Stratégie de cache : on ne stocke pas le résultat de *toute* requête reçue.
+On cherche d'abord un **résultat final** pour la clé de paramètres. Sinon on
+réutilise une **série quotidienne intermédiaire** déjà estimée pour ce point ;
+seulement à défaut on relance l'IDW, on persiste les intermédiaires, puis on
+agrège et on enregistre `DjuCalculation` / `DjuResult`.
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
     actor Client
     participant Controller as DjuController
     participant Service as DjuService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     Client->>Controller: POST /dju/point
     Controller->>Service: calculate_point_dju(params)
 
     Service->>DAO: find_reusable_result(params)
-    DAO->>DB: SELECT cached DJU
-    DB-->>DAO: result or none
-    DAO-->>Service: cached?
+    DAO->>DB: SELECT résultat final en cache
+    DB-->>DAO: résultat ou vide
+    DAO-->>Service: cache final ?
 
-    alt Cached result available
+    alt Résultat final disponible
         Service-->>Controller: list[DjuResult]
-    else Compute
-        Service->>DAO: get nearby stations and reports
-        DAO->>DB: SELECT stations / temperatures
-        DB-->>Service: meteorological data
-        Service->>Service: IDW + altitude, compute and aggregate DJU
+    else Pas de résultat final
+        Service->>DAO: find_daily_temperatures(point, période)
+        DAO->>DB: SELECT intermédiaires quotidiens
+        DB-->>DAO: série ou vide
+        DAO-->>Service: cache intermédiaire ?
+
+        alt Série quotidienne en cache
+            Service->>Service: DjuCalculation.aggregate(time_step)
+        else Estimation nécessaire
+            Service->>DAO: get nearby stations and reports
+            DAO->>DB: SELECT stations / températures
+            DB-->>Service: données météo
+            Service->>Service: IDW + altitude optionnelle
+            Service->>DAO: save_daily_temperatures(point, série)
+            DAO->>DB: INSERT intermédiaires
+            Service->>Service: DjuCalculation.run / aggregate
+        end
+
         Service->>DAO: save(DjuCalculation)
-        DAO->>DB: INSERT results
+        DAO->>DB: INSERT DjuCalculation et DjuResult
         Service-->>Controller: list[DjuResult]
     end
 
-    Controller-->>Client: JSON response
+    Controller-->>Client: Réponse JSON
 ```
 
-## 3. Consult public zonings (F2)
-
-Any client can list official geographic zones (departments and regions) and
-their municipalities. These zonings are available to every user.
+## 3. Consultation des zonages publics (F2)
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
     actor Client
     participant Controller as ZoneController
     participant Service as ZoneService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     Client->>Controller: GET /zones?type=department|region
     Controller->>Service: list_public_zones(type)
     Service->>DAO: find_by_type(type)
-    DAO->>DB: SELECT zones and municipalities
-    DB-->>DAO: zone rows
+    DAO->>DB: SELECT zonages et communes
+    DB-->>DAO: lignes
     DAO-->>Service: list[GeographicZone]
-    Service-->>Controller: departments or regions
-    Controller-->>Client: JSON list of public zonings
+    Service-->>Controller: départements ou régions
+    Controller-->>Client: Liste JSON des zonages officiels
 ```
 
-## 4. Compute a zone DJU (F3)
+## 4. Calcul d'un DJU zonal (F3)
 
-DJU are computed on a territory (department, region, or custom zoning) with a
-given period, time step and granularity. For official zonings the client does
-not need to be authenticated. For a personal zoning, authentication is
-required. Municipality-level DJU are then aggregated (for example
-population-weighted).
+Même logique de cache à deux niveaux : résultat final territorial, puis
+températures quotidiennes **par commune** (pas de recalcul systématique des
+moyennes communales).
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
     actor Client
     participant Controller as DjuController
     participant Service as DjuService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     Client->>Controller: POST /dju/zone
-    Note over Controller: Auth required for personal zonings
+    Note over Controller: Auth requise pour un zonage personnalisé
     Controller->>Service: calculate_zone_dju(zone, params)
 
     Service->>DAO: find_reusable_result(zone, params)
-    DAO->>DB: SELECT cached DJU
-    DB-->>DAO: result or none
-    DAO-->>Service: cached?
+    DAO->>DB: SELECT résultat final en cache
+    DB-->>DAO: résultat ou vide
+    DAO-->>Service: cache final ?
 
-    alt Cached result available
+    alt Résultat final disponible
         Service-->>Controller: list[DjuResult]
-    else Compute
+    else Calcul
         Service->>DAO: get municipalities of the zone
         DAO->>DB: SELECT municipalities
         DB-->>Service: list[Municipality]
-        Service->>Service: Point DJU per municipality, then aggregate
+
+        loop Pour chaque commune
+            Service->>DAO: find_daily_temperatures(commune, période)
+            alt Intermédiaire communal absent
+                Service->>Service: estimation IDW au centroïde
+                Service->>DAO: save_daily_temperatures(commune, série)
+            end
+            Service->>Service: DJU ponctuel communal
+        end
+
+        Service->>Service: Agrégation pondérée (population)
         Service->>DAO: save(DjuCalculation)
-        DAO->>DB: INSERT results
+        DAO->>DB: INSERT résultats
         Service-->>Controller: list[DjuResult]
     end
 
-    Controller-->>Client: JSON response
+    Controller-->>Client: Réponse JSON
 ```
 
-## 5. Authenticate a user
-
-Authentication is required before creating, importing or managing personal
-zonings (F4).
+## 5. Authentification d'un utilisateur
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
-    actor User
+    actor User as Utilisateur
     participant Controller as UserController
     participant Service as AuthService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     User->>Controller: POST /user/login
     Controller->>Service: authenticate(credentials)
     Service->>DAO: find_by_username(username)
     DAO->>DB: SELECT user
-    DB-->>DAO: user row
+    DB-->>DAO: ligne utilisateur
     DAO-->>Service: User
-    Service->>Service: Issue session / token
-    Service-->>Controller: authenticated User
+    Service->>Service: User.check_password / émettre session
+    Service-->>Controller: Utilisateur authentifié
     Controller-->>User: 200 OK (session)
 ```
 
-## 6. Create a personalized zoning (F4)
-
-An authenticated user builds a custom territory as a set of municipalities and
-stores it for later DJU calculations.
+## 6. Création d'un zonage personnalisé (F4)
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
-    actor User
+    actor User as Utilisateur
     participant Controller as ZoneController
     participant Service as ZoneService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     User->>Controller: POST /user/zones
     Controller->>Service: create_zoning(user, description, municipalities)
-    Service->>Service: Validate municipalities
+    Service->>Service: Valider les communes
     Service->>DAO: save(Zoning)
-    DAO->>DB: INSERT zoning and links
-    DB-->>DAO: zoning id
+    DAO->>DB: INSERT zonage et liens
+    DB-->>DAO: id zonage
     DAO-->>Service: Zoning
     Service-->>Controller: Zoning
     Controller-->>User: 201 Created
 ```
 
-## 7. Manage a personalized zoning (F4)
-
-The owner can update the description, add or remove municipalities, or delete
-a personal zoning.
+## 7. Gestion d'un zonage personnalisé (F4)
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
-    actor User
+    actor User as Utilisateur
     participant Controller as ZoneController
     participant Service as ZoneService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
     User->>Controller: PATCH / DELETE /user/zones/{id}
-    Controller->>Service: get_zoning(id) for owner
+    Controller->>Service: get_zoning(id) pour le propriétaire
     Service->>DAO: find_zone(id)
-    DAO->>DB: SELECT zoning
+    DAO->>DB: SELECT zonage
     DB-->>Service: Zoning
 
-    alt Update
+    alt Mise à jour
         Service->>DAO: update(Zoning)
-        DAO->>DB: UPDATE zoning / links
+        DAO->>DB: UPDATE zonage / liens
         Controller-->>User: 200 OK
-    else Delete
+    else Suppression
         Service->>DAO: delete(id)
-        DAO->>DB: DELETE zoning
+        DAO->>DB: DELETE zonage
         Controller-->>User: 204 No Content
     end
 ```
 
-## 8. Import a zoning from a file (FO3)
-
-An authenticated user uploads a CSV or JSON file listing municipalities. The
-API parses the file, maps rows to known communes, then stores a personal
-zoning (same persistence path as F4).
+## 8. Import d'un zonage depuis un fichier (FO3)
 
 ```mermaid
-%%{
-  init: {
-    "theme": "base",
-    "themeVariables": {
-      "background": "#ffffff",
-      "mainBkg": "#ffffff",
-      "textColor": "#111111",
-      "primaryColor": "#ffffff",
-      "primaryTextColor": "#111111",
-      "primaryBorderColor": "#222222",
-      "secondaryColor": "#f3f4f6",
-      "tertiaryColor": "#ffffff",
-      "lineColor": "#222222",
-      "actorBkg": "#ffffff",
-      "actorBorder": "#222222",
-      "actorTextColor": "#111111",
-      "actorLineColor": "#222222",
-      "signalColor": "#111111",
-      "signalTextColor": "#111111",
-      "labelBoxBkgColor": "#ffffff",
-      "labelBoxBorderColor": "#222222",
-      "labelTextColor": "#111111",
-      "loopTextColor": "#111111",
-      "noteBkgColor": "#fff3cd",
-      "noteTextColor": "#111111",
-      "noteBorderColor": "#222222",
-      "activationBkgColor": "#e5e7eb",
-      "activationBorderColor": "#222222",
-      "sequenceNumberColor": "#ffffff",
-      "fontFamily": "arial",
-      "fontSize": "16px"
-    }
-  }
-}%%
 sequenceDiagram
-    actor User
+    actor User as Utilisateur
     participant Controller as ZoneController
     participant Service as ZoneService
-    participant DAO as DAO layer
-    participant DB as Database
+    participant DAO as Couche DAO
+    participant DB as Base de données
 
-    User->>Controller: POST /user/zones/import (CSV or JSON)
+    User->>Controller: POST /user/zones/import (CSV ou JSON)
     Controller->>Service: import_zoning(user, file)
-    Service->>Service: Parse file and resolve municipalities
+    Service->>Service: Analyser le fichier et résoudre les communes
     Service->>DAO: save(Zoning)
-    DAO->>DB: INSERT zoning and links
-    DB-->>DAO: zoning id
+    DAO->>DB: INSERT zonage et liens
+    DB-->>DAO: id zonage
     DAO-->>Service: Zoning
     Service-->>Controller: Zoning
     Controller-->>User: 201 Created

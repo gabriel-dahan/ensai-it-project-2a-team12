@@ -1,154 +1,185 @@
-# Activity diagrams
+# Diagrammes d'activité
 
-## 1. Initialize the databases
+Libellés en français. Les méthodes du modèle de domaine (identifiants
+code) sont indiquées entre crochets sur les actions concernées.
+
+## 1. Initialisation des stations et observations météo (F0)
 
 ```mermaid
 flowchart TD
-    start([Start initialization]) --> createDb[Create database schema]
-    createDb --> weather[Download Météo-France files by department]
-    weather --> filterMeteo[Keep useful columns and dates from 1990]
-    filterMeteo --> dedup{Duplicates on station and date?}
-    dedup -->|Yes| dropDup[Drop duplicate rows]
-    dedup -->|No| stations
-    dropDup --> stations[Extract distinct weather stations]
-    stations --> saveMeteo[Insert stations and daily reports]
-    saveMeteo --> geo[Download municipalities from geo.api.gouv.fr]
-    geo --> alti[Enrich each commune with altitude]
-    alti --> hierarchy[Build department and region hierarchy]
-    hierarchy --> saveGeo[Insert municipalities, departments and regions]
-    saveGeo --> ready([Databases ready])
+    start([Début]) --> entree["Entrée : fichiers Météo-France par département"]
+    entree --> createDb([Créer le schéma SQL])
+    createDb --> weather([Télécharger les fichiers par département])
+    weather --> filterMeteo(["Conserver DATE, NUM_POSTE, TN, TX, TM\n(+ LAT, LON, ALTI pour les stations)\nRenommage : TN→tmin, TX→tmax, TM→tmean\nFiltrer dates ≥ 1990"])
+    filterMeteo --> dedup{Doublon\nstation + date ?}
+    dedup -->|Oui| dropDup([Supprimer les doublons])
+    dedup -->|Non| stations
+    dropDup --> stations([Extraire les stations distinctes])
+    stations --> saveMeteo(["Insérer stations et relevés\nMeteoStation / TemperatureReport"])
+    saveMeteo --> sortie["Sortie : meteo_stations,\ntemperature_reports"]
+    sortie --> ready([Fin])
 ```
 
-## 2. Estimate local temperatures
+## 2. Initialisation des zonages officiels (F0)
 
 ```mermaid
 flowchart TD
-    start([Start estimation]) --> nearest[Find n nearest stations]
-    nearest --> found{At least one station with reports?}
-    found -->|No| fail([Cannot estimate temperature])
-    found -->|Yes| reports[Load daily Tmin / Tmax / Tmean]
-    reports --> loopDay[For each day of the period]
-    loopDay --> correct[Apply altitude correction if needed]
-    correct --> weights[Compute IDW weights from Haversine distances]
-    weights --> interp[Interpolate daily temperature]
-    interp --> moreDays{More days?}
-    moreDays -->|Yes| loopDay
-    moreDays -->|No| done([Daily temperature series])
+    start([Début]) --> entree["Entrée : geo.api.gouv.fr\n(communes, départements, régions)"]
+    entree --> geo([Télécharger le référentiel communal])
+    geo --> alti([Enrichir chaque commune en altitude])
+    alti --> hierarchy(["Construire la hiérarchie\nRegion → Department → Municipality"])
+    hierarchy --> saveGeo(["Insérer régions, départements, communes\nGeographicZone.get_municipalities"])
+    saveGeo --> sortie["Sortie : regions, departments,\nmunicipalities"]
+    sortie --> ready([Fin])
 ```
 
-## 3. Compute a punctual DJU
+## 3. Estimation des températures locales
 
 ```mermaid
 flowchart TD
-    start([Client sends POST /dju/point]) --> validate{Parameters valid?}
-    validate -->|No| badReq[Return 400 Bad Request]
-    badReq --> endBad([End])
-    validate -->|Yes| cache{Reusable result in database?}
-    cache -->|Yes| formatCached[Format cached DJU]
+    start([Début]) --> entree["Entrée : lat, lon, altitude?\npériode, n stations voisines\n(n optionnel, défaut système = 3)"]
+    entree --> nearest(["Sélectionner les n stations les plus proches\nMeteoStation.distance_to / find_nearest_stations"])
+    nearest --> found{Au moins une station\navec des relevés ?}
+    found -->|Non| fail([Impossible d'estimer])
+    found -->|Oui| reports(["Charger Tmin, Tmax, Tmean quotidiens\nMeteoStation.get_reports"])
+    reports --> weights(["Une seule fois hors boucle jour :\ndistances Haversine + poids IDW\n(vectorisation Pandas)"])
+    weights --> hasAlt{Altitude cible\nfournie ?}
+    hasAlt -->|Non| loopDay
+    hasAlt -->|Oui| noteAlt["Correction d'altitude autorisée\nTemperatureReport.apply_altitude_correction"]
+    noteAlt --> loopDay
+    loopDay([Pour chaque jour de la période]) --> correct{Altitude connue ?}
+    correct -->|Oui| applyCorr(["Corriger Tmin/Tmax/Tmean\napply_altitude_correction"])
+    correct -->|Non| interp
+    applyCorr --> interp(["Interpoler la température du jour\navec les poids IDW déjà calculés"])
+    interp --> moreDays{Autres jours ?}
+    moreDays -->|Oui| loopDay
+    moreDays -->|Non| sortie["Sortie : série quotidienne\nTmin / Tmax / Tmean estimées"]
+    sortie --> done([Fin])
+```
+
+## 4. Calcul d'un DJU ponctuel (F1)
+
+```mermaid
+flowchart TD
+    start([Début : POST /dju/point]) --> entree["Entrée : lat, lon, altitude?,\ndate_début, date_fin, time_step,\nseuil_chauffage?, seuil_clim?, n?"]
+    entree --> validate{Paramètres valides ?\nlat et lon présents ;\ndate_début ≤ date_fin ;\ntime_step ∈ day, month, year ;\nau moins un seuil ;\npériode dans données ≥ 1990}
+    validate -->|Non| badReq([Retour 400])
+    badReq --> endBad([Fin])
+    validate -->|Oui| cacheFinal{Résultat final\nen cache ?\ncan_reuse_intermediate}
+    cacheFinal -->|Oui| formatCached([Formater le DJU en cache])
     formatCached --> respondOk
-    cache -->|No| estimate[Estimate daily temperatures]
-    estimate --> tempsOk{Temperatures available?}
-    tempsOk -->|No| noData[Return 404 / 422]
-    noData --> endNoData([End])
-    tempsOk -->|Yes| daily[For each day: heating DJU = max threshold - T, 0]
-    daily --> cooling{Cooling threshold provided?}
-    cooling -->|Yes| dailyCool[Cooling DJU = max T - threshold, 0]
-    cooling -->|No| aggregate
-    dailyCool --> aggregate[Aggregate by time step: daily, weekly, monthly, yearly]
-    aggregate --> save[Save DjuCalculation and DjuResult]
-    save --> formatCached2[Format results]
-    formatCached2 --> respondOk[Return JSON to client]
-    respondOk --> endOk([End])
+    cacheFinal -->|Non| cacheInter{Série quotidienne\ndu point en cache ?}
+    cacheInter -->|Oui| daily
+    cacheInter -->|Non| estimate([Estimer les températures locales])
+    estimate --> tempsOk{Températures\ndisponibles ?}
+    tempsOk -->|Non| noData([Retour 404 / 422])
+    noData --> endNoData([Fin])
+    tempsOk -->|Oui| persistInter([Persister les intermédiaires quotidiens])
+    persistInter --> daily
+    daily{Seuil chauffage\nfournit ?} -->|Oui| heat(["DJU chauffage jour par jour\nDjuType.compute_daily_value\nmode heating"])
+    daily -->|Non| coolOnly
+    heat --> coolOnly{Seuil clim.\nfournit ?}
+    coolOnly -->|Oui| cool(["DJU climatisation jour par jour\nDjuType.compute_daily_value\nmode cooling"])
+    coolOnly -->|Non| aggregate
+    cool --> aggregate
+    aggregate(["Agréger selon time_step\nDjuCalculation.aggregate"]) --> save(["Persister DjuCalculation et DjuResult\nDjuCalculation.run"])
+    save --> formatCached2([Formater les résultats])
+    formatCached2 --> respondOk["Sortie : JSON des DjuResult"]
+    respondOk --> endOk([Fin])
 ```
 
-## 4. Compute a zone DJU
+## 5. Calcul d'un DJU zonal (F3)
 
 ```mermaid
 flowchart TD
-    start([Client sends POST /dju/zone]) --> validate{Parameters valid?}
-    validate -->|No| badReq[Return 400 Bad Request]
-    badReq --> endBad([End])
-    validate -->|Yes| loadZone[Load zone and its municipalities]
-    loadZone --> exists{Zone found?}
-    exists -->|No| notFound[Return 404 Not Found]
-    notFound --> end404([End])
-    exists -->|Yes| kind{Public department or region?}
-    kind -->|No, personal zoning| auth{User authenticated and owner?}
-    auth -->|No| forbidden[Return 401 / 403]
-    forbidden --> endAuth([End])
-    auth -->|Yes| cache
-    kind -->|Yes| cache{Reusable result in database?}
-    cache -->|Yes| formatCached[Format cached DJU]
+    start([Début : POST /dju/zone]) --> entree["Entrée : zone_type, zone_id,\ndate_début, date_fin, time_step,\nseuil_chauffage?, seuil_clim?"]
+    entree --> validate{Paramètres valides ?\nzone_type et zone_id ;\ndate_début ≤ date_fin ;\ntime_step ∈ day, month, year ;\nau moins un seuil}
+    validate -->|Non| badReq([Retour 400])
+    badReq --> endBad([Fin])
+    validate -->|Oui| loadZone(["Charger le territoire et ses communes\nGeographicZone.get_municipalities"])
+    loadZone --> exists{Zone trouvée ?}
+    exists -->|Non| notFound([Retour 404])
+    notFound --> end404([Fin])
+    exists -->|Oui| kind{Département ou\nrégion public ?}
+    kind -->|Non, zonage perso| auth{Utilisateur authentifié\net propriétaire ?}
+    auth -->|Non| forbidden([Retour 401 / 403])
+    forbidden --> endAuth([Fin])
+    auth -->|Oui| cache
+    kind -->|Oui| cache{Résultat final\nen cache ?}
+    cache -->|Oui| formatCached([Formater le DJU en cache])
     formatCached --> respondOk
-    cache -->|No| loopMuni[For each municipality]
-    loopMuni --> pointDju[Compute punctual DJU at commune coordinates]
-    pointDju --> moreMuni{More municipalities?}
-    moreMuni -->|Yes| loopMuni
-    moreMuni -->|No| agg[Aggregate commune DJU, e.g. population-weighted]
-    agg --> save[Save DjuCalculation and DjuResult]
-    save --> respondOk[Return JSON to client]
-    respondOk --> endOk([End])
+    cache -->|Non| loopMuni([Pour chaque commune])
+    loopMuni --> cacheCommune{Températures quotidiennes\nde la commune en cache ?}
+    cacheCommune -->|Oui| pointDju
+    cacheCommune -->|Non| pointEst([Estimer puis persister\nles intermédiaires communaux])
+    pointEst --> pointDju(["DJU ponctuel au centroïde\nDjuCalculation.run"])
+    pointDju --> moreMuni{Autres communes ?}
+    moreMuni -->|Oui| loopMuni
+    moreMuni -->|Non| agg([Agrégation pondérée par population])
+    agg --> save(["Persister DjuCalculation et DjuResult"])
+    save --> respondOk["Sortie : JSON des DjuResult"]
+    respondOk --> endOk([Fin])
 ```
 
-## 5. Consult zonings
+## 6. Consultation des zonages officiels (F2)
 
 ```mermaid
 flowchart TD
-    start([Client requests zonings]) --> type{Filter by type?}
-    type -->|Department| depts[Load departments and municipalities]
-    type -->|Region| regions[Load regions, departments and municipalities]
-    type -->|All| all[Load all official zones]
+    start([Début]) --> entree["Entrée : type = department | region | all"]
+    entree --> type{Filtrer par type ?}
+    type -->|Département| depts(["Charger départements et communes\nget_municipalities"])
+    type -->|Région| regions(["Charger régions, départements, communes"])
+    type -->|Tous| all([Charger tous les zonages officiels])
     depts --> respond
     regions --> respond
-    all --> respond[Return JSON list]
-    respond --> endOk([End])
+    all --> respond["Sortie : liste JSON des zonages"]
+    respond --> endOk([Fin])
 ```
 
-## 6. Create or import a personalized zoning
-
-An authenticated user defines a custom set of municipalities, either by sending
-a list in the request body or by importing a CSV / JSON file.
+## 7. Création ou import d'un zonage personnalisé (F4 / FO3)
 
 ```mermaid
 flowchart TD
-    start([User creates or imports a zoning]) --> auth{Authenticated?}
-    auth -->|No| unauth[Return 401 Unauthorized]
-    unauth --> endUnauth([End])
-    auth -->|Yes| source{Import from file?}
-    source -->|Yes| parse[Parse CSV or JSON]
-    parse --> formatOk{File format valid?}
-    formatOk -->|No| badFile[Return 400 Bad Request]
-    badFile --> endFile([End])
-    formatOk -->|Yes| resolve
-    source -->|No| resolve[Resolve municipality identifiers]
-    resolve --> known{All communes exist?}
-    known -->|No| unknown[Return 400 unknown municipalities]
-    unknown --> endUnknown([End])
-    known -->|Yes| save[Insert Zoning and commune links]
-    save --> created[Return 201 Created]
-    created --> endOk([End])
+    start([Début]) --> entree["Entrée : description + codes INSEE\nou fichier CSV / JSON"]
+    entree --> auth{Authentifié ?}
+    auth -->|Non| unauth([Retour 401])
+    unauth --> endUnauth([Fin])
+    auth -->|Oui| source{Import fichier ?}
+    source -->|Oui| parse([Analyser CSV ou JSON])
+    parse --> formatOk{Format valide ?}
+    formatOk -->|Non| badFile([Retour 400])
+    badFile --> endFile([Fin])
+    formatOk -->|Oui| resolve
+    source -->|Non| resolve(["Résoudre les identifiants de communes\nget_municipality_by_insee"])
+    resolve --> known{Toutes les communes\nexistent ?}
+    known -->|Non| unknown([Retour 400 communes inconnues])
+    unknown --> endUnknown([Fin])
+    known -->|Oui| save(["User.create_zoning\nZoning.add_municipality\nInsérer Zoning et liens"])
+    save --> created["Sortie : 201 Created + zonage"]
+    created --> endOk([Fin])
 ```
 
-## 7. Manage a personalized zoning
+## 8. Gestion d'un zonage personnalisé (F4)
 
 ```mermaid
 flowchart TD
-    start([User updates or deletes a zoning]) --> auth{Authenticated?}
-    auth -->|No| unauth[Return 401 Unauthorized]
-    unauth --> endUnauth([End])
-    auth -->|Yes| load[Load zoning by id]
-    load --> found{Zoning found?}
-    found -->|No| notFound[Return 404 Not Found]
-    notFound --> end404([End])
-    found -->|Yes| owner{User is the owner?}
-    owner -->|No| forbidden[Return 403 Forbidden]
-    forbidden --> end403([End])
-    owner -->|Yes| action{Requested action?}
-    action -->|Update| update[Apply description and commune changes]
-    update --> persist[Save changes]
-    persist --> ok[Return 200 OK]
-    ok --> endOk([End])
-    action -->|Delete| deleteZ[Delete zoning and links]
-    deleteZ --> gone[Return 204 No Content]
-    gone --> endDel([End])
+    start([Début]) --> entree["Entrée : id zonage,\ndescription? / codes INSEE? / suppression"]
+    entree --> auth{Authentifié ?}
+    auth -->|Non| unauth([Retour 401])
+    unauth --> endUnauth([Fin])
+    auth -->|Oui| load([Charger le zonage par id])
+    load --> found{Zonage trouvé ?}
+    found -->|Non| notFound([Retour 404])
+    notFound --> end404([Fin])
+    found -->|Oui| owner{Utilisateur\npropriétaire ?}
+    owner -->|Non| forbidden([Retour 403])
+    forbidden --> end403([Fin])
+    owner -->|Oui| action{Action demandée ?}
+    action -->|Modifier| update(["Appliquer description et communes\nadd_municipality / remove_municipality"])
+    update --> persist([Enregistrer les changements])
+    persist --> ok["Sortie : 200 OK"]
+    ok --> endOk([Fin])
+    action -->|Supprimer| deleteZ([Supprimer le zonage et les liens])
+    deleteZ --> gone["Sortie : 204 No Content"]
+    gone --> endDel([Fin])
 ```
