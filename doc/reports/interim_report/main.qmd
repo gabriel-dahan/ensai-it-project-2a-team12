@@ -18,41 +18,49 @@ format:
       \usepackage{caption}
       \usepackage{longtable}
       \usepackage{array}
-      \captionsetup{font=small,labelfont=bf,skip=6pt}
+      \captionsetup{font=footnotesize,labelfont=bf,skip=2pt}
+      \setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
+      \setlength{\floatsep}{6pt plus 2pt minus 2pt}
+      \setlength{\intextsep}{6pt plus 2pt minus 2pt}
+      \setlength{\abovecaptionskip}{2pt}
+      \setlength{\belowcaptionskip}{0pt}
       
       \definecolor{pale-red}{RGB}{211, 93, 93}
       \definecolor{pale-blue}{RGB}{42, 77, 126}
       
       \usepackage{indentfirst}
-      \setlength{\parindent}{1.5em}
+      \setlength{\parindent}{1em}
+      \setlength{\parskip}{0pt}
       
       \usepackage{titlesec}
       
       % Titres principaux (chapitres / parties)
       \titleformat{\chapter}[hang]
-        {\normalfont\Large\bfseries\color{black}}
+        {\normalfont\large\bfseries\color{black}}
         {\thechapter} 
         {0.8em} 
         {}
-      \titlespacing*{\chapter}{0pt}{-20pt}{20pt} 
+      \titlespacing*{\chapter}{0pt}{-24pt}{8pt} 
       
       % Sections
       \titleformat{\section}
-        {\normalfont\large\bfseries\color{black}} 
+        {\normalfont\normalsize\bfseries\color{black}} 
         {\thesection}
-        {1em}
+        {0.8em}
         {}
+      \titlespacing*{\section}{0pt}{8pt}{4pt}
         
       % Sous-sections
       \titleformat{\subsection}
         {\normalfont\normalsize\bfseries\color{black}}
         {\thesubsection}
-        {1em}
+        {0.8em}
         {}
+      \titlespacing*{\subsection}{0pt}{6pt}{2pt}
 lang: fr
-fontsize: 11pt
+fontsize: 10pt
 papersize: a4
-geometry: top=1.5cm, bottom=1.5cm, left=2.5cm, right=2.5cm
+geometry: top=1.5cm, bottom=1.5cm, left=1.5cm, right=1.5cm
 
 link-citations: true
 colorlinks: true
@@ -82,27 +90,27 @@ communication@ensai.fr\\
 www.ensai.fr\\
 \end{flushright}
 
-\includegraphics{resources/ensai_logo.png}\\
+\includegraphics[width=0.35\textwidth]{resources/ensai_logo.png}\\
+\vspace{0.4cm}
+
+{\Large\textsc{Rapport Intermédiaire}}\\
+\vspace{0.15cm}
+{\Large Dossier d'Analyse}\\
+
 \vspace{1.0cm}
 
-{\LARGE\textsc{Rapport Intermédiaire}}\\
-\vspace{0.3cm}
-{\LARGE Dossier d'Analyse}\\
-
-\vspace{2.5cm}
-
 \rule{\textwidth}{0.5mm}\\
-\vspace{0.8cm}
+\vspace{0.4cm}
 
 \begin{flushleft}
 \emph{Sujet :}\\
 \textbf{API de calcul de DJU}\\
 \end{flushleft}
 
-\vspace{0.8cm}
+\vspace{0.4cm}
 \rule{\textwidth}{0.5mm}\\
 
-\vspace{2.5cm}
+\vspace{1.0cm}
 
 \begin{flushleft}
 \emph{Groupe 12 :}\\
@@ -248,7 +256,7 @@ Cette partie décrit l'architecture et, pour chaque fonctionnalité, les diagram
 
 L'application suit une architecture en couches. La couche de présentation expose l'API REST FastAPI, valide les entrées et formate les réponses. Elle délègue à la couche de services (`DjuService`, `ZoneService`, `AuthService`, `TemperatureService`), qui orchestre le métier. Les objets du domaine (`DjuCalculation`, `GeographicZone`, `Zoning`, etc.) encapsulent les règles de calcul. La couche DAO abstrait PostgreSQL et la lecture Parquet.
 
-![Architecture en couches](resources/diagrams/packages_diagram.png){fig-align="center" width="100%" fig-pos="H"}
+![Architecture en couches](resources/diagrams/packages_diagram.png){fig-align="center" width="82%" fig-pos="H"}
 
 Chaque route HTTP est prise en charge par un contrôleur (`DjuController`, `ZoneController`, `UserController`), qui valide la requête puis délègue au service correspondant. Le fichier principal enregistre ces contrôleurs. Cette séparation facilite maintenance et tests.
 
@@ -256,15 +264,14 @@ Chaque route HTTP est prise en charge par un contrôleur (`DjuController`, `Zone
 
 Le schéma relationnel reprend les entités du domaine : utilisateurs, hiérarchie administrative, zonages personnalisés, stations, relevés, types et résultats de DJU. Les séries brutes massives restent en Parquet ; SQL sert de référence et de cache.
 
-![Modèle entité-relation](resources/diagrams/database_diagram.png){fig-align="center" width="95%" fig-pos="H"}
+![Modèle entité-relation](resources/diagrams/database_diagram.png){fig-align="center" width="80%" fig-pos="H"}
 
 ## Vue des cas d'utilisation
 
 Le diagramme des cas d'utilisation reprend les acteurs définis en section 1.1 et les aligne sur F0 à F4 et FO3. L'utilisateur authentifié hérite des droits de l'utilisateur anonyme (flèche d'héritage UML). « Gérer un zonage » couvre la modification de la description, l'ajout ou le retrait de communes, et la suppression. « Importer un zonage » étend la création en partant d'un fichier CSV ou JSON.
 
-![Cas d'utilisation de l'API DJU](resources/diagrams/use_case_diagram.png){fig-align="center" width="90%" fig-pos="H"}
+![Cas d'utilisation de l'API DJU](resources/diagrams/use_case_diagram.png){fig-align="center" width="80%" fig-pos="H"}
 
-\clearpage
 
 ## Modèle du domaine
 
@@ -272,7 +279,7 @@ Le modèle du domaine structure les objets métier. `GeographicZone` factorise l
 
 Les stations et relevés (`MeteoStation`, `TemperatureReport`) alimentent un `DjuCalculation`. Celui-ci utilise exactement un `DjuType` (chauffage ou climatisation), produit une collection de `DjuResult`, et porte sur au plus une `GeographicZone` (calcul zonal) ou sur des coordonnées (calcul ponctuel). Un `User` possède zéro à plusieurs `DjuCalculation`.
 
-![Modèle du domaine](resources/diagrams/class_diagram.png){fig-align="center" width="85%" fig-pos="H"}
+![Modèle du domaine](resources/diagrams/class_diagram.png){fig-align="center" width="78%" fig-pos="H"}
 
 \clearpage
 
@@ -288,23 +295,19 @@ Le second télécharge le référentiel communal, enrichit les altitudes et stru
 \centering
 \begin{minipage}[b]{0.48\textwidth}
 \centering
-\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_1.png}
+\includegraphics[width=\linewidth,keepaspectratio]{resources/diagrams/activity_diagram_1.png}
 \caption{Initialisation des stations et observations}
 \label{fig:act-init-meteo}
 \end{minipage}\hfill
 \begin{minipage}[b]{0.48\textwidth}
 \centering
-\includegraphics[width=\linewidth,height=0.70\textheight,keepaspectratio]{resources/diagrams/activity_diagram_2.png}
+\includegraphics[width=\linewidth,keepaspectratio]{resources/diagrams/activity_diagram_2.png}
 \caption{Initialisation des zonages officiels}
 \label{fig:act-init-geo}
 \end{minipage}
 \end{figure}
 
-Du point de vue des échanges, l'Administrateur déclenche les scripts d'alimentation, qui dialoguent avec les sources externes puis avec la couche DAO.
-
-![Initialisation des bases de données (F0)](resources/diagrams/sequence_diagram_1.png){fig-align="center" width="100%" fig-pos="H"}
-
-\clearpage
+Du point de vue des échanges, l'Administrateur déclenche les scripts d'alimentation, qui dialoguent avec les sources externes puis avec la couche DAO. Le diagramme de séquence associé est en annexe.
 
 ## Estimation des températures locales
 
@@ -314,12 +317,11 @@ Les $n$ stations les plus proches sont sélectionnées ($n$ optionnel, défaut 3
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.55\textwidth,height=0.75\textheight,keepaspectratio]{resources/diagrams/activity_diagram_3.png}
+\includegraphics[width=0.88\textwidth,keepaspectratio]{resources/diagrams/activity_diagram_3.png}
 \caption{Estimation des températures locales}
 \label{fig:act-temp}
 \end{figure}
 
-\clearpage
 
 ## F1 — Calcul d'un DJU ponctuel
 
@@ -331,29 +333,16 @@ Le cache est consulté en deux temps : résultat final, puis série quotidienne 
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.55\textwidth,height=0.75\textheight,keepaspectratio]{resources/diagrams/activity_diagram_4.png}
+\includegraphics[width=0.88\textwidth,keepaspectratio]{resources/diagrams/activity_diagram_4.png}
 \caption{Calcul d'un DJU ponctuel}
 \label{fig:act-point}
 \end{figure}
 
-![Calcul d'un DJU ponctuel (F1)](resources/diagrams/sequence_diagram_2.png){fig-align="center" width="100%" fig-pos="H"}
-
-\clearpage
+Le diagramme de séquence de F1 est en annexe.
 
 ## F2 — Consultation des zonages officiels
 
-Tout client peut lister les départements, les régions, ou l'ensemble des zonages officiels, avec les communes associées (`GeographicZone.get_municipalities`).
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.50\textwidth,height=0.60\textheight,keepaspectratio]{resources/diagrams/activity_diagram_6.png}
-\caption{Consultation des zonages officiels}
-\label{fig:act-consult}
-\end{figure}
-
-![Consultation des zonages publics (F2)](resources/diagrams/sequence_diagram_3.png){fig-align="center" width="100%" fig-pos="H"}
-
-\clearpage
+Tout client peut lister les départements, les régions, ou l'ensemble des zonages officiels, avec les communes associées (`GeographicZone.get_municipalities`). Les diagrammes d'activité et de séquence correspondants figurent en annexe.
 
 ## F3 — Calcul d'un DJU zonal
 
@@ -363,46 +352,18 @@ Les zonages officiels sont publics. Un zonage personnalisé exige que l'appelant
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.55\textwidth,height=0.75\textheight,keepaspectratio]{resources/diagrams/activity_diagram_5.png}
+\includegraphics[width=0.88\textwidth,keepaspectratio]{resources/diagrams/activity_diagram_5.png}
 \caption{Calcul d'un DJU zonal}
 \label{fig:act-zone}
 \end{figure}
 
-![Calcul d'un DJU zonal (F3)](resources/diagrams/sequence_diagram_4.png){fig-align="center" width="100%" fig-pos="H"}
-
-\clearpage
+Le diagramme de séquence de F3 est en annexe.
 
 ## F4 — Espace utilisateur authentifié
 
 Après inscription et authentification (`User.check_password`), l'utilisateur gère ses zonages via `User.create_zoning`, `Zoning.add_municipality` et `Zoning.remove_municipality`.
 
-La création manuelle envoie une description et une liste de codes INSEE. L'import FO3 suit le même chemin une fois le fichier CSV ou JSON analysé et les communes résolues. La gestion permet de modifier la composition ou de supprimer le zonage, sous réserve d'être propriétaire.
-
-![Authentification d'un utilisateur](resources/diagrams/sequence_diagram_5.png){fig-align="center" width="100%" fig-pos="H"}
-
-\begin{figure}[H]
-\centering
-\begin{minipage}[b]{0.48\textwidth}
-\centering
-\includegraphics[width=\linewidth,height=0.65\textheight,keepaspectratio]{resources/diagrams/activity_diagram_7.png}
-\caption{Création ou import d'un zonage}
-\label{fig:act-create}
-\end{minipage}\hfill
-\begin{minipage}[b]{0.48\textwidth}
-\centering
-\includegraphics[width=\linewidth,height=0.65\textheight,keepaspectratio]{resources/diagrams/activity_diagram_8.png}
-\caption{Gestion d'un zonage personnalisé}
-\label{fig:act-manage}
-\end{minipage}
-\end{figure}
-
-![Création d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_6.png){fig-align="center" width="100%" fig-pos="H"}
-
-![Gestion d'un zonage personnalisé (F4)](resources/diagrams/sequence_diagram_7.png){fig-align="center" width="100%" fig-pos="H"}
-
-![Import d'un zonage depuis un fichier (FO3)](resources/diagrams/sequence_diagram_8.png){fig-align="center" width="100%" fig-pos="H"}
-
-\clearpage
+La création manuelle envoie une description et une liste de codes INSEE. L'import FO3 suit le même chemin une fois le fichier CSV ou JSON analysé et les communes résolues. La gestion permet de modifier la composition ou de supprimer le zonage, sous réserve d'être propriétaire. Les diagrammes d'activité et de séquence de F4 et FO3 sont regroupés en annexe.
 
 ## Synthèse
 
@@ -430,3 +391,93 @@ Ce rapport d'étape formalise les choix architecturaux et fonctionnels retenus p
 L'architecture en couches sépare présentation, services, métier et persistance. Le stockage dual (SQL pour le référentiel et le cache, Parquet pour les séries volumineuses) et la stratégie de cache à deux niveaux (intermédiaires quotidiens puis résultats finaux) limitent les recalculs.
 
 Les prochaines étapes portent sur l'implémentation des schémas, des services de calcul et d'interpolation, de l'authentification, puis des tests. Une attention particulière sera accordée au traitement des données manquantes et à la validation numérique des DJU.
+
+\appendix
+
+# Annexes
+
+## Diagrammes d'activité complémentaires
+
+Consultation des zonages officiels (F2), création ou import (F4 / FO3), et gestion d'un zonage (F4).
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth,keepaspectratio]{resources/diagrams/activity_diagram_6.png}
+\caption{Consultation (F2)}
+\label{fig:act-consult}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth,keepaspectratio]{resources/diagrams/activity_diagram_7.png}
+\caption{Création / import}
+\label{fig:act-create}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth,keepaspectratio]{resources/diagrams/activity_diagram_8.png}
+\caption{Gestion (F4)}
+\label{fig:act-manage}
+\end{minipage}
+\end{figure}
+
+## Diagrammes de séquence complémentaires
+
+Initialisation (F0), calculs F1 et F3, consultation publique (F2), authentification, création et gestion (F4), import (FO3).
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_1.png}
+\caption{Initialisation (F0)}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_2.png}
+\caption{DJU ponctuel (F1)}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_4.png}
+\caption{DJU zonal (F3)}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_3.png}
+\caption{Zonages publics (F2)}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_5.png}
+\caption{Authentification}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_6.png}
+\caption{Création (F4)}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_7.png}
+\caption{Gestion (F4)}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{resources/diagrams/sequence_diagram_8.png}
+\caption{Import (FO3)}
+\end{minipage}
+\end{figure}
