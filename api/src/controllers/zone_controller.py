@@ -1,101 +1,121 @@
 """
-API routes for zones creation and management.
+API routes for zones.
+
+Two routers, mounted by the main file:
+    router       -> /zones        F2, official zones, public
+    user_router  -> /user/zones   F4 / FO3, the caller's personal zonings
 """
 
-from fastapi import APIRouter
-
-
-router = APIRouter()
-
-
-@router.get("/")
-async def get_created_zones():
-    ...
-
-@router.post("/create")
-async def create_personalized_zoning():
-    ...
-
-"""
-Controller for:
-  F2 — read-only access to administrative zonings (Region, Department).
-  F4 — an authenticated user's own custom Zoning (set of municipalities).
-"""
-
-from __future__ import annotations
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 
 from business_object.geo_zone import GeographicZone, Zoning
 from business_object.user import User
-from dao.geo_zone_dao import GeoZoneDao
-from controllers.base_controller import BaseController
+from controllers.dependencies import SERVICE_ERRORS, get_current_user, http_error
+from schema.zone_schema import (
+    MunicipalityResponse,
+    ZoneResponse,
+    ZoneTypeFilter,
+    ZoningCreateRequest,
+    ZoningResponse,
+    ZoningUpdateRequest,
+)
+from service.zone_service import ZoneService
+
+router = APIRouter()
+user_router = APIRouter()
+service = ZoneService()
 
 
-class ZoneController(BaseController):
-    
+def _zone_to_response(zone: GeographicZone) -> ZoneResponse:
+    return ZoneResponse(
+        id=zone.id,
+        name=zone.name,
+        zone_type=zone.zone_type,
+        insee_code=getattr(zone, "insee_code", None),
+        municipalities=[
+            MunicipalityResponse(insee_code=m.insee_code, name=m.name) for m in zone.get_municipalities()
+        ],
+    )
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.dao = GeoZoneDao()
 
-    # --- F2: référentiel administratif ---
+def _zoning_to_response(zoning: Zoning) -> ZoningResponse:
+    return ZoningResponse(
+        id=zoning.id,
+        name=zoning.name,
+        description=zoning.description,
+        created_at=zoning.created_at,
+        codes_insee=[m.insee_code for m in zoning.get_municipalities()],
+    )
 
-    def list_regions(self):
-        return self.dao.list_regions()
 
-    def list_departments(self):
-        return self.dao.list_departments()
+# --- F2: official zones ---
 
-    def get_municipalities_of_zone(self, zone_type: str, zone_id: int) -> list:
-        """Résout la liste des communes d'un territoire, sans reconstruire
-        un objet Region/Department complet — le DAO réel n'expose que des
-        requêtes par id de département pour l'instant."""
-        if zone_type == "department":
-            return self.dao.get_municipalities_by_department(zone_id)
-        if zone_type == "region":
-            return self.dao.get_municipalities_by_region(zone_id)
-        if zone_type == "zoning":
-            zoning = self.dao.get_zoning(zone_id)
-            if zoning is None:
-                raise ValueError(f"No zoning with id {zone_id}")
-            return zoning.get_municipalities()
-        raise ValueError(f"Unknown zone_type: {zone_type!r}")
+@router.get("", response_model=list[ZoneResponse])
+async def list_zones(zone_type: ZoneTypeFilter = Query(default="all", alias="type")):
+    """
+    F2 - List the departments, the regions or both, with their municipalities.
+    """
+    try:
+        return [_zone_to_response(zone) for zone in service.list_public_zones(zone_type)]
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
 
-    def build_zone(self, zone_type: str, zone_id: int) -> GeographicZone:
-        """Construit un GeographicZone porteur des communes résolues, pour
-        que DjuCalculation.run() puisse appeler zone.get_municipalities()
-        de façon uniforme quel que soit le type de territoire demandé."""
-        municipalities = self.get_municipalities_of_zone(zone_type, zone_id)
-        return Zoning(id=None, name=f"{zone_type}:{zone_id}", municipalities=municipalities)
 
-    # --- F4: zonages personnalisés d'un utilisateur authentifié ---
-    # Identifiés par code INSEE plutôt que par id numérique : c'est la clé
-    # naturelle exposée par get_municipality_by_insee(), et c'est aussi ce
-    # que l'utilisateur/le fichier CSV (FO3) fournira le plus naturellement.
+ 
 
-    def create_zoning(self, user: User, description: str, insee_codes: list[str]) -> Zoning:
-        zoning = user.create_zoning(description)
-        for code in insee_codes:
-            municipality = self.dao.get_municipality_by_insee(code)
-            if municipality is None:
-                raise ValueError(f"No municipality with INSEE code {code!r}")
-            zoning.add_municipality(municipality)
-        return self.dao.save_zoning(zoning)
+@user_router.get("", response_model=list[ZoningResponse])
+async def list_my_zonings(user: User = Depends(get_current_user)):
+    return [_zoning_to_response(z) for z in service.list_user_zonings(user)]
 
-    def add_municipality(self, zoning: Zoning, insee_code: str) -> Zoning:
-        municipality = self.dao.get_municipality_by_insee(insee_code)
-        if municipality is None:
-            raise ValueError(f"No municipality with INSEE code {insee_code!r}")
-        zoning.add_municipality(municipality)
-        return self.dao.save_zoning(zoning)
 
-    def remove_municipality(self, zoning: Zoning, insee_code: str) -> Zoning:
-        municipality = self.dao.get_municipality_by_insee(insee_code)
-        if municipality is not None:
-            zoning.remove_municipality(municipality)
-        return self.dao.save_zoning(zoning)
+@user_router.post("", response_model=ZoningResponse, status_code=201)
+async def create_zoning(request: ZoningCreateRequest, user: User = Depends(get_current_user)):
+    """
+    F4 - Create a zoning from a description and a list of INSEE codes (400 if one is unknown).
+    """
+    try:
+        return _zoning_to_response(service.create_zoning(user, request.description, request.codes_insee))
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
 
-    def list_user_zonings(self, user: User) -> list[Zoning]:
-        return self.dao.list_zonings_by_user(user.id)
 
-    def delete_zoning(self, zoning: Zoning) -> None:
-        self.dao.delete_zoning(zoning.id)
+@user_router.post("/import", response_model=ZoningResponse, status_code=201)
+async def import_zoning(
+    file: UploadFile = File(...),
+    description: str | None = Form(default=None),
+    user: User = Depends(get_current_user),
+):
+    """
+    FO3 - Create a zoning from a CSV or JSON file listing INSEE codes.
+    """
+    try:
+        content = await file.read()
+        return _zoning_to_response(service.import_zoning(user, file.filename or "", content, description))
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
+
+
+@user_router.patch("/{zoning_id}", response_model=ZoningResponse)
+async def update_zoning(zoning_id: int, request: ZoningUpdateRequest, user: User = Depends(get_current_user)):
+    """
+    F4 - Change the description and/or add or remove municipalities (owner only).
+    """
+    try:
+        zoning = service.update_zoning(
+            user, zoning_id, request.description, request.add_codes_insee, request.remove_codes_insee
+        )
+        return _zoning_to_response(zoning)
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
+
+
+@user_router.delete("/{zoning_id}", status_code=204)
+async def delete_zoning(zoning_id: int, user: User = Depends(get_current_user)):
+    """
+    F4 - Delete a zoning (owner only).
+    """
+    try:
+        service.delete_zoning(user, zoning_id)
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
+    return Response(status_code=204)
