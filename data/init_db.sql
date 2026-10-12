@@ -64,12 +64,15 @@ CREATE TABLE temperature_reports (
 CREATE INDEX idx_temperature_reports_station_date
     ON temperature_reports (station_id, date);
 
+
 CREATE TABLE dju_types (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     base_temperature DOUBLE PRECISION NOT NULL,
-    mode VARCHAR(16) NOT NULL CHECK (mode IN ('heating', 'cooling'))
+    mode VARCHAR(16) NOT NULL CHECK (mode IN ('heating', 'cooling')),
+    UNIQUE (mode, base_temperature)
 );
+
 
 CREATE TABLE dju_calculations (
     id SERIAL PRIMARY KEY,
@@ -82,7 +85,9 @@ CREATE TABLE dju_calculations (
     dju_type_id INTEGER NOT NULL REFERENCES dju_types (id),
     user_id INTEGER REFERENCES users (id),
     zone_type VARCHAR(32),
-    zone_id INTEGER
+    zone_id INTEGER,
+    number_of_stations INTEGER,
+    use_altitude BOOLEAN
 );
 
 CREATE TABLE dju_results (
