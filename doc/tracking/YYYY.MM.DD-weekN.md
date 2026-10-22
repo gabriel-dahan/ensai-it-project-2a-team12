@@ -20,7 +20,7 @@ Week No. NN
 
 ### Student 4: LASSALLE Gwenael
 
-- [X] RAS
+- [ ] ...
 
 ### Student 5: FERAL Marceau
 
