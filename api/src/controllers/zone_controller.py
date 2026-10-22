@@ -65,7 +65,11 @@ async def list_zones(zone_type: ZoneTypeFilter = Query(default="all", alias="typ
 
 @user_router.get("", response_model=list[ZoningResponse])
 async def list_my_zonings(user: User = Depends(get_current_user)):
-    return [_zoning_to_response(z) for z in service.list_user_zonings(user)]
+    """List the zonings owned by the authenticated user."""
+    try:
+        return [_zoning_to_response(z) for z in service.list_user_zonings(user)]
+    except SERVICE_ERRORS as exc:
+        raise http_error(exc) from exc
 
 
 @user_router.post("", response_model=ZoningResponse, status_code=201)

@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from controllers import dju_controller
+from controllers import dju_controller, user_controller, zone_controller
 
 
 app = FastAPI(
@@ -26,6 +26,21 @@ app.include_router(
     dju_controller.router,
     prefix="/dju",
     tags=["DJU"],
+)
+app.include_router(
+    zone_controller.router,
+    prefix="/zones",
+    tags=["Zones"],
+)
+app.include_router(
+    user_controller.router,
+    prefix="/user",
+    tags=["User"],
+)
+app.include_router(
+    zone_controller.user_router,
+    prefix="/user/zones",
+    tags=["Zonings"],
 )
 
 

@@ -6,3 +6,5 @@
 .Rproj.user
 
 doc/scripts/
+
+__pycache__
