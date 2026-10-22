@@ -8,7 +8,7 @@ Week No. NN
 
 ### Student 1: YOUSFI Aziz
 
-- [ ] ...
+- [X] RAS
 
 ### Student 2: STERLIN Eudes
 
