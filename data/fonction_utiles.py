@@ -1,7 +1,9 @@
-"""Create database tables and load open-data into PostgreSQL."""
+"""Crée les tables (init_db.sql) puis les remplit à partir des fichiers Parquet.
 
-from __future__ import annotations
+Relançable : les lignes déjà présentes sont ignorées (ON CONFLICT DO NOTHING).
+"""
 
+import io
 import os
 from pathlib import Path
 
@@ -11,174 +13,169 @@ from dotenv import load_dotenv
 from psycopg2 import sql
 from psycopg2.extras import execute_values
 
-from communes import fetch_communes
-from meteo_stations import fetch_meteo_data
-
 DATA_DIR = Path(__file__).resolve().parent
-ROOT_DIR = DATA_DIR.parent
+RAW_DIR = DATA_DIR / "raw_data"
 SQL_FILE = DATA_DIR / "init_db.sql"
-
-COMMUNE_INSERT = """
-    INSERT INTO communes (
-        nom, code_postal, code_departement, code_region,
-        longitude, latitude, altitude
-    ) VALUES %s
-"""
-
-METEO_INSERT = """
-    INSERT INTO meteo_observations (
-        num_poste, date, nom_usuel,
-        tmin, tmax, tmean,
-        latitude, longitude, altitude, tmed_tn_tx
-    ) VALUES %s
-"""
-
-METEO_BATCH_SIZE = 5000
+TAILLE_LOT = 500_000  # relevés envoyés par COPY
 
 
-def _load_env() -> None:
-    load_dotenv(ROOT_DIR / ".env")
-
-
-def _connect():
-    return psycopg2.connect(
+def connecter():
+    """Connexion PostgreSQL avec le schéma du .env comme search_path."""
+    load_dotenv(DATA_DIR.parent / ".env")
+    conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
         port=os.environ["POSTGRES_PORT"],
         dbname=os.environ["POSTGRES_DATABASE"],
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
     )
-
-
-def _ensure_schema(conn) -> None:
-    schema = os.environ["POSTGRES_SCHEMA"]
+    schema = sql.Identifier(os.environ["POSTGRES_SCHEMA"])
     with conn.cursor() as cur:
-        cur.execute(
-            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
-                sql.Identifier(schema)
-            )
-        )
-        cur.execute(
-            sql.SQL("SET search_path TO {}").format(sql.Identifier(schema))
-        )
+        cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(schema))
+        cur.execute(sql.SQL("SET search_path TO {}").format(schema))
     conn.commit()
+    return conn
 
 
-def create_tables(conn) -> None:
-    """Execute DDL from init_db.sql inside the configured schema."""
-    ddl = SQL_FILE.read_text(encoding="utf-8")
+def creer_tables(conn) -> None:
+    """Exécute init_db.sql."""
     with conn.cursor() as cur:
-        cur.execute(ddl)
+        cur.execute(SQL_FILE.read_text(encoding="utf-8"))
     conn.commit()
-    print(f"Tables créées via {SQL_FILE.name}.")
+    print("Tables créées.")
 
 
-def _none_if_na(value):
-    if value is None:
-        return None
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-    return value
+def sans_nan(valeur):
+    """Remplace NaN / NA par None pour psycopg2."""
+    return None if pd.isna(valeur) else valeur
 
 
-def insert_communes(conn, rows: list[dict]) -> None:
-    values = [
+def entier(valeur):
+    """Convertit en int Python (None si absent)."""
+    return None if pd.isna(valeur) else int(valeur)
+
+
+def inserer(conn, table: str, colonnes: list[str], lignes: list[tuple]) -> None:
+    """Insère des lignes en ignorant celles déjà présentes."""
+    requete = f"INSERT INTO {table} ({', '.join(colonnes)}) VALUES %s ON CONFLICT DO NOTHING"
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        avant = cur.fetchone()[0]
+        execute_values(cur, requete, lignes, page_size=5000)
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        apres = cur.fetchone()[0]
+    conn.commit()
+    print(f"{table} : {len(lignes):,} lignes lues, {apres - avant:,} nouvelles, {apres:,} au total")
+
+
+def ids_par_code(conn, table: str, colonne: str) -> dict[str, int]:
+    """Dictionnaire {code: id} d'une table."""
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT {colonne}, id FROM {table}")
+        return dict(cur.fetchall())
+
+
+def inserer_regions(conn) -> None:
+    """Régions."""
+    df = pd.read_parquet(RAW_DIR / "regions.parquet")
+    lignes = [(r.code, r.nom) for r in df.itertuples()]
+    inserer(conn, "regions", ["insee_code", "name"], lignes)
+
+
+def inserer_departements(conn) -> None:
+    """Départements (rattachés à leur région)."""
+    df = pd.read_parquet(RAW_DIR / "departements.parquet")
+    regions = ids_par_code(conn, "regions", "insee_code")
+    lignes = [(d.code, d.nom, regions[d.codeRegion]) for d in df.itertuples() if d.codeRegion in regions]
+    inserer(conn, "departments", ["insee_code", "name", "region_id"], lignes)
+
+
+def inserer_communes(conn) -> None:
+    """Communes (celles d'un département inconnu sont ignorées)."""
+    df = pd.read_parquet(RAW_DIR / "communes.parquet")
+    departements = ids_par_code(conn, "departments", "insee_code")
+    inconnues = ~df["codeDepartement"].isin(departements.keys())
+    if inconnues.any():
+        print(f"{inconnues.sum()} communes ignorées (département inconnu)")
+    lignes = [
         (
-            row.get("Commune"),
-            row.get("Code_Postal") or None,
-            row.get("Dept"),
-            row.get("Region"),
-            _none_if_na(row.get("Lon")),
-            _none_if_na(row.get("Lat")),
-            _none_if_na(row.get("Altitude")),
+            c.code,
+            c.nom,
+            c.latitude,
+            c.longitude,
+            sans_nan(c.altitude),
+            entier(c.population),
+            departements[c.codeDepartement],
         )
-        for row in rows
+        for c in df[~inconnues].itertuples()
     ]
+    colonnes = ["insee_code", "name", "latitude", "longitude", "altitude", "population", "department_id"]
+    inserer(conn, "municipalities", colonnes, lignes)
+
+
+def inserer_stations(conn, meteo: pd.DataFrame) -> None:
+    """Une station par NUM_POSTE."""
+    stations = meteo.drop_duplicates("NUM_POSTE").dropna(subset=["LAT", "LON"])
+    lignes = [
+        (s.NUM_POSTE, sans_nan(s.NOM_USUEL), s.LAT, s.LON, sans_nan(s.ALTI))
+        for s in stations.itertuples()
+    ]
+    inserer(conn, "meteo_stations", ["station_code", "name", "latitude", "longitude", "altitude"], lignes)
+
+
+def inserer_releves(conn, meteo: pd.DataFrame) -> None:
+    """COPY dans une table temporaire, puis INSERT ... ON CONFLICT DO NOTHING, par lots."""
+    colonnes = ["NUM_POSTE", "DATE", "TMIN", "TMAX", "SOURCE_TMIN", "SOURCE_TMAX"]
     with conn.cursor() as cur:
-        execute_values(cur, COMMUNE_INSERT, values, page_size=1_000)
+        # La table temporaire est vidée à chaque commit
+        cur.execute(
+            """
+            CREATE TEMP TABLE IF NOT EXISTS releves_tmp (
+                station_code VARCHAR(20), date DATE,
+                temp_min DOUBLE PRECISION, temp_max DOUBLE PRECISION,
+                source_tmin VARCHAR(32), source_tmax VARCHAR(32)
+            ) ON COMMIT DELETE ROWS
+            """
+        )
     conn.commit()
-    print(f"{len(values)} communes insérées.")
 
-
-def insert_meteo_observations(conn, df: pd.DataFrame) -> None:
-    if df.empty:
-        print("Aucune observation météo à insérer.")
-        return
-
-    work = df.copy()
-    work["DATE"] = pd.to_datetime(
-        work["DATE"].astype(str), format="%Y%m%d", errors="coerce"
-    )
-    work = work.dropna(subset=["NUM_POSTE", "DATE"])
-
-    columns = [
-        "NUM_POSTE",
-        "DATE",
-        "NOM_USUEL",
-        "TMIN",
-        "TMAX",
-        "TMEAN",
-        "LAT",
-        "LON",
-        "ALTI",
-        "TMED_TN_TX",
-    ]
-    for col in columns:
-        if col not in work.columns:
-            work[col] = None
-
-    total = 0
-    with conn.cursor() as cur:
-        for start in range(0, len(work), METEO_BATCH_SIZE):
-            chunk = work.iloc[start : start + METEO_BATCH_SIZE][columns]
-            values = [
-                (
-                    str(num_poste),
-                    date_val.date(),
-                    _none_if_na(nom_usuel),
-                    _none_if_na(tmin),
-                    _none_if_na(tmax),
-                    _none_if_na(tmean),
-                    _none_if_na(lat),
-                    _none_if_na(lon),
-                    _none_if_na(alti),
-                    _none_if_na(tmed),
-                )
-                for num_poste, date_val, nom_usuel, tmin, tmax, tmean, lat, lon, alti, tmed in chunk.itertuples(
-                    index=False, name=None
-                )
-            ]
-            execute_values(
-                cur, METEO_INSERT, values, page_size=METEO_BATCH_SIZE
+    total, nouvelles = len(meteo), 0
+    for debut in range(0, total, TAILLE_LOT):
+        lot = meteo.iloc[debut : debut + TAILLE_LOT][colonnes]
+        tampon = io.StringIO()
+        lot.to_csv(tampon, index=False, header=False, date_format="%Y-%m-%d")
+        tampon.seek(0)
+        with conn.cursor() as cur:
+            cur.copy_expert("COPY releves_tmp FROM STDIN WITH (FORMAT csv)", tampon)
+            cur.execute(
+                """
+                INSERT INTO temperature_reports
+                    (station_id, date, temp_min, temp_max, source_tmin, source_tmax)
+                SELECT s.id, t.date, t.temp_min, t.temp_max, t.source_tmin, t.source_tmax
+                FROM releves_tmp t
+                JOIN meteo_stations s ON s.station_code = t.station_code
+                ON CONFLICT (station_id, date) DO NOTHING
+                """
             )
-            total += len(values)
-            print(f"Observations météo insérées : {total} / {len(work)}")
-
-    conn.commit()
-    print(f"{total} observations météo insérées.")
+            nouvelles += cur.rowcount
+        conn.commit()
+        print(f"temperature_reports : {min(debut + TAILLE_LOT, total):,} / {total:,} lignes lues")
+    print(f"temperature_reports : {nouvelles:,} nouvelles lignes")
 
 
 def main() -> None:
-    _load_env()
-    print("Connexion à PostgreSQL...")
-    conn = _connect()
-
+    conn = connecter()
     try:
-        _ensure_schema(conn)
-        create_tables(conn)
+        creer_tables(conn)
+        inserer_regions(conn)
+        inserer_departements(conn)
+        inserer_communes(conn)
 
-        print("Téléchargement des communes...")
-        communes = fetch_communes()
-        insert_communes(conn, communes)
-
-        print("Téléchargement des données météo (peut être long)...")
-        meteo_df = fetch_meteo_data()
-        insert_meteo_observations(conn, meteo_df)
-
-        print("Initialisation de la base terminée.")
+        print("Lecture des relevés nettoyés...")
+        meteo = pd.read_parquet(RAW_DIR / "meteo_france_nettoye.parquet")
+        inserer_stations(conn, meteo)
+        inserer_releves(conn, meteo)
+        print("Base prête.")
     finally:
         conn.close()
 

@@ -1,5 +1,6 @@
-
 from datetime import date
+
+from psycopg2.extras import execute_values
 
 from business_object.dju import DjuCalculation, DjuResult
 from dao.db_connection import DBConnection
@@ -7,43 +8,22 @@ from utils.singleton import Singleton
 
 
 class DjuDao(metaclass=Singleton):
-    """
-    Objet d'accès aux données pour les calculs DJU.
+    """Accès aux types de DJU et aux calculs DJU enregistrés (cache)."""
 
-    Cette classe permet d'enregistrer, de rechercher,
-    de récupérer et de supprimer les calculs DJU
-    ainsi que leurs résultats dans PostgreSQL.
-    """
-
-    def get_or_create_dju_type(
-        self, mode: str, threshold: float
-    ) -> int:
-        """
-        Recherche un type de DJU existant.
-
-        Si le type n'existe pas, il est créé dans
-        la base de données.
-
-        Retourne l'identifiant du type de DJU.
-        """
-
+    def get_or_create_dju_type(self, mode: str, threshold: float) -> int:
+        """Renvoie l'id du type de DJU (mode, seuil), en le créant si besoin."""
         if mode not in ("heating", "cooling"):
             raise ValueError("Mode de DJU invalide")
 
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """
-                    INSERT INTO dju_types
-                        (name, mode, base_temperature)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (mode, base_temperature)
-                    DO UPDATE SET name = EXCLUDED.name
-                    RETURNING id
-                    """,
+                    "INSERT INTO dju_types (name, mode, base_temperature) "
+                    "VALUES (%s, %s, %s) "
+                    "ON CONFLICT (mode, base_temperature) DO UPDATE SET name = EXCLUDED.name "
+                    "RETURNING id",
                     (mode, mode, threshold),
                 )
-
                 result = cursor.fetchone()
 
         return result["id"]
@@ -59,17 +39,7 @@ class DjuDao(metaclass=Singleton):
         number_of_stations: int,
         use_altitude: bool,
     ) -> int | None:
-        """
-        Recherche un calcul DJU déjà enregistré.
-
-        La recherche utilise les paramètres du calcul :
-        zone, type de DJU, période, pas temporel,
-        nombre de stations et correction d'altitude.
-
-        Retourne l'identifiant du calcul s'il existe,
-        sinon retourne None.
-        """
-
+        """Renvoie l'id du dernier calcul enregistré avec ces paramètres, ou None."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -98,37 +68,19 @@ class DjuDao(metaclass=Singleton):
                         use_altitude,
                     ),
                 )
-
                 result = cursor.fetchone()
 
         return result["id"] if result else None
 
-    def get_calculation_results(
-        self, calculation_id: int
-    ) -> list[DjuResult]:
-        """
-        Récupère les résultats associés à un calcul DJU.
-
-        Les résultats sont classés par date de début.
-
-        Chaque ligne récupérée dans la base de données
-        est transformée en objet DjuResult.
-
-        Retourne une liste d'objets DjuResult.
-        """
-
+    def get_calculation_results(self, calculation_id: int) -> list[DjuResult]:
+        """Renvoie les résultats d'un calcul, triés par début de période."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """
-                    SELECT id, period_start, period_end, value
-                    FROM dju_results
-                    WHERE calculation_id = %s
-                    ORDER BY period_start
-                    """,
+                    "SELECT id, period_start, period_end, value, days_with_data, observed_ratio "
+                    "FROM dju_results WHERE calculation_id = %s ORDER BY period_start",
                     (calculation_id,),
                 )
-
                 rows = cursor.fetchall()
 
         return [
@@ -137,70 +89,30 @@ class DjuDao(metaclass=Singleton):
                 period_start=row["period_start"],
                 period_end=row["period_end"],
                 value=row["value"],
+                days_with_data=row["days_with_data"],
+                observed_ratio=row["observed_ratio"],
             )
             for row in rows
         ]
 
-    def save_calculation(
-        self,
-        calculation: DjuCalculation,
-        number_of_stations: int,
-        use_altitude: bool,
-    ) -> int:
-        """
-        Enregistre un calcul DJU et ses résultats.
-
-        Seuls les calculs portant sur une zone
-        géographique sont enregistrés dans le cache.
-
-        Le calcul est d'abord enregistré dans la table
-        dju_calculations pour obtenir son identifiant.
-
-        Chaque résultat est ensuite enregistré dans
-        la table dju_results avec cet identifiant.
-
-        Retourne l'identifiant du calcul enregistré.
-        """
-
-        if calculation.zone is None:
-            raise ValueError(
-                "Seuls les calculs par zone peuvent être enregistrés"
-            )
-
-        if calculation.zone.id is None:
-            raise ValueError(
-                "La zone doit posséder un identifiant"
-            )
-
+    def save_calculation(self, calculation: DjuCalculation) -> int:
+        """Enregistre un calcul sur zone et ses résultats ; renvoie l'id du calcul."""
+        if calculation.zone is None or calculation.zone.id is None:
+            raise ValueError("Seuls les calculs sur une zone enregistrée peuvent être stockés")
         if calculation.type.id is None:
-            raise ValueError(
-                "Le type de DJU doit posséder un identifiant"
-            )
-
+            raise ValueError("Le type de DJU doit avoir un identifiant")
         if not calculation.results:
-            raise ValueError(
-                "Impossible d'enregistrer un calcul sans résultats"
-            )
+            raise ValueError("Impossible d'enregistrer un calcul sans résultats")
 
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
                     INSERT INTO dju_calculations (
-                        dju_type_id,
-                        zone_type,
-                        zone_id,
-                        start_date,
-                        end_date,
-                        time_step,
-                        number_of_stations,
-                        use_altitude,
-                        computed_at
+                        dju_type_id, zone_type, zone_id, start_date, end_date,
+                        time_step, number_of_stations, use_altitude, computed_at
                     )
-                    VALUES (
-                        %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s
-                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -210,62 +122,45 @@ class DjuDao(metaclass=Singleton):
                         calculation.start_date,
                         calculation.end_date,
                         calculation.time_step,
-                        number_of_stations,
-                        use_altitude,
+                        calculation.number_of_stations,
+                        calculation.use_altitude,
                         calculation.computed_at or date.today(),
                     ),
                 )
-
                 calculation_id = cursor.fetchone()["id"]
 
-                for result in calculation.results:
-                    cursor.execute(
-                        """
-                        INSERT INTO dju_results (
-                            calculation_id,
-                            period_start,
-                            period_end,
-                            value
-                        )
-                        VALUES (%s, %s, %s, %s)
-                        RETURNING id
-                        """,
+                # Une seule requête pour tous les résultats ; les ids reviennent dans l'ordre
+                rows = execute_values(
+                    cursor,
+                    "INSERT INTO dju_results (calculation_id, period_start, period_end, "
+                    "value, days_with_data, observed_ratio) VALUES %s RETURNING id",
+                    [
                         (
                             calculation_id,
-                            result.period_start,
-                            result.period_end,
-                            result.value,
-                        ),
-                    )
+                            r.period_start,
+                            r.period_end,
+                            r.value,
+                            r.days_with_data,
+                            r.observed_ratio,
+                        )
+                        for r in calculation.results
+                    ],
+                    fetch=True,
+                )
 
-                    result.id = cursor.fetchone()["id"]
-
+        for result, row in zip(calculation.results, rows):
+            result.id = row["id"]
         calculation.id = calculation_id
         return calculation_id
 
-    def delete_calculations_for_zone(
-        self, zone_type: str, zone_id: int
-    ) -> int:
-        """
-        Supprime les calculs DJU enregistrés pour une zone.
-
-        Cette méthode est utile lorsqu'un zonage
-        personnalisé est modifié ou supprimé.
-
-        Retourne le nombre de calculs supprimés.
-        """
-
+    def delete_calculations_for_zone(self, zone_type: str, zone_id: int) -> int:
+        """Supprime les calculs enregistrés d'une zone ; renvoie leur nombre."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """
-                    DELETE FROM dju_calculations
-                    WHERE zone_type = %s
-                      AND zone_id = %s
-                    """,
+                    "DELETE FROM dju_calculations WHERE zone_type = %s AND zone_id = %s",
                     (zone_type, zone_id),
                 )
-
                 deleted_count = cursor.rowcount
 
         return deleted_count

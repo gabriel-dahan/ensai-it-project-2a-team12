@@ -1,6 +1,4 @@
-"""
-Schemas for official zones (F2) and personal zonings (F4 / FO3).
-"""
+"""Schémas des zones officielles (F2) et des zonages personnels (F4, FO3)."""
 
 from datetime import date
 from typing import Literal
@@ -16,20 +14,37 @@ class MunicipalityResponse(BaseModel):
 
 
 class ZoneResponse(BaseModel):
+    """Zone officielle sans ses communes."""
+
     id: int | None
     name: str
     zone_type: str
     insee_code: str | None = None
-    municipalities: list[MunicipalityResponse] = Field(default_factory=list)
+
+
+class ZoneDetailResponse(ZoneResponse):
+    """Zone officielle avec ses communes."""
+
+    municipalities: list[MunicipalityResponse]
 
 
 class ZoningCreateRequest(BaseModel):
-    description: str = Field(..., min_length=1, max_length=255)
-    codes_insee: list[str] = Field(..., min_length=1, description="INSEE codes of the municipalities")
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    codes_insee: list[str] = Field(..., min_length=1)
+
+
+class ZoningImportRequest(BaseModel):
+    """Contenu d'un fichier CSV ou JSON envoyé sous forme de texte."""
+
+    filename: str
+    content: str
+    name: str | None = None
+    description: str | None = None
 
 
 class ZoningUpdateRequest(BaseModel):
-    description: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
     add_codes_insee: list[str] = Field(default_factory=list)
     remove_codes_insee: list[str] = Field(default_factory=list)
 

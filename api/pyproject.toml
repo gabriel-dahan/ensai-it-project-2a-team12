@@ -1,38 +1,35 @@
 [project]
 name = "dju_api_12"
 version = "0.1.0"
-description = "API Template for the ENSAI 2nd year IT project"
+description = "API de calcul des degrés-jours unifiés (projet ENSAI 2A)"
 authors = [{ name = "Yousfi Aziz" }, { name = "Sterlin Eudes" }, { name = "Dahan Gabriel" }, { name = "Lassalle Gwenael" }, { name = "Feral Marceau" }]
 requires-python = ">=3.13"
 
 dependencies = [
     "fastapi",
-    "inquirerPy",
+    "uvicorn",
+    "pydantic",
     "psycopg2-binary",
     "python-dotenv",
-    "pydantic[email]",
-    "PyYAML",
-    "requests",
-    "regex",
-    "uvicorn",
     "bcrypt",
+    "pyjwt",
 ]
 
-# Dependencies used only for development, not for runtime
+# Outils de développement
 [project.optional-dependencies]
-dev = ["bandit", "coverage", "pylint", "pytest", "ruff"]
+dev = ["pytest", "httpx", "ruff", "coverage"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = { "" = "src" } # source files are in folder src
+package-dir = { "" = "src" } # code source dans src
 
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["src", "tests"]
+src = ["src", "test"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
@@ -44,7 +41,7 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["tests"]
+testpaths = ["test"]
 python_files = ["*test*.py"]
 addopts = "-v -s -x"
 

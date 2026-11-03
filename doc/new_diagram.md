@@ -2,6 +2,15 @@
 
 Le diagramme présente les objets métier et les services de l'API. Les noms de classes, d'attributs et de méthodes sont ceux du code ; les libellés d'association sont en français.
 
+> **Mise à jour du 3 novembre 2026** : le code suit maintenant ces diagrammes (voir [etat_des_lieux.md](etat_des_lieux.md)). Les choix suivants ont été ajoutés depuis la version précédente :
+> - **`zone_type`** est gardé comme attribut de classe des zones ; il sert à enregistrer les calculs.
+> - **Références entre objets** : les zones portent les identifiants `region_id`, `department_id` et `owner_id` plutôt que des références vers d'autres objets.
+> - **Part de valeurs observées** : `TemperatureReport` a un attribut `observed`, et `DjuResult` donne `days_with_data` et `observed_ratio`.
+> - **Authentification** par jeton JWT.
+> - **`GET /zones`** renvoie une liste légère, et le détail est sur `GET /zones/{zone_type}/{zone_id}`.
+> - **Export CSV** avec `format=csv`.
+> - **Import d'un zonage** par un corps JSON, sans upload de fichier.
+
 | Couleur | Groupe | Classes |
 |---|---|---|
 | 🟩 Vert foncé | Services | `DjuService`, `TemperatureService`, `ZoneService`, `AuthService` |
@@ -19,17 +28,17 @@ classDiagram
         +calculate_zone_dju(request, user) list~DjuCalculation~
     }
     class TemperatureService {
-        +find_candidate_stations(latitude, longitude, number_of_stations, period) list~MeteoStation~
-        +estimate_daily_temperatures(latitude, longitude, altitude, stations, period) list~TemperatureReport~
-        +get_municipality_temperatures(municipality, period, number_of_stations, use_altitude) list~TemperatureReport~
+        +find_candidate_stations(latitude, longitude, number_of_stations, start_date, end_date) list~MeteoStation~
+        +estimate_daily_temperatures(latitude, longitude, altitude, stations, start_date, end_date) list~TemperatureReport~
+        +get_municipality_temperatures(municipality, start_date, end_date, number_of_stations, use_altitude) list~TemperatureReport~
     }
     class ZoneService {
         +list_public_zones(zone_type) list~GeographicZone~
         +list_user_zonings(user) list~Zoning~
-        +get_zone(zone_type, zone_id) GeographicZone
+        +get_zone(zone_type, zone_id, user) GeographicZone
         +get_sub_zones(zone, aggregation_level) list~GeographicZone~
         +create_zoning(user, name, description, codes_insee) Zoning
-        +import_zoning(user, filename, content, description) Zoning
+        +import_zoning(user, filename, content, description, name) Zoning
         +update_zoning(user, zoning_id, description, add_codes_insee, remove#95;codes#95;insee) Zoning
         +delete_zoning(user, zoning_id) None
     }
@@ -43,6 +52,7 @@ classDiagram
         <<abstract>>
         +int id
         +str name
+        +str zone_type$
         +get_municipalities() list~Municipality~
     }
     class Region {
@@ -52,6 +62,7 @@ classDiagram
     }
     class Department {
         +str insee_code
+        +int region_id
         +get_municipalities() list~Municipality~
         +add_municipality(municipality) None
     }
@@ -61,11 +72,13 @@ classDiagram
         +float longitude
         +float altitude
         +int population
+        +int department_id
         +distance_to(lat, lon) float
     }
     class Zoning {
         +str description
         +date created_at
+        +int owner_id
         +add_municipality(m) None
         +remove_municipality(m) None
         +get_municipalities() list~Municipality~
@@ -91,6 +104,7 @@ classDiagram
         +date date
         +float temp_min
         +float temp_max
+        +bool observed
         +daily_mean() float
         +apply_altitude_correction(delta_alt) TemperatureReport
     }
@@ -120,6 +134,8 @@ classDiagram
         +date period_start
         +date period_end
         +float value
+        +int days_with_data
+        +float observed_ratio
     }
 
     GeographicZone <|-- Region
@@ -176,26 +192,9 @@ Les services organisent ces objets. `DjuService` reçoit la demande transmise pa
 
 Les objets métier n'accèdent jamais à la base de données ni aux contrôleurs : ils ne font que des calculs sur leurs propres données, ce qui permet de les tester sans base. Seuls les services font appel à la couche DAO.
 
-## Éléments faux ou à changer dans le code
+## État du code
 
-- **`TemperatureReport`** : `daily_mean()` renvoie `temp_mean` (la valeur TM mesurée par Météo-France) au lieu de (`temp_min` + `temp_max`) / 2, qui est la méthode de référence. Il faut corriger le calcul et retirer l'attribut `temp_mean`. La classe n'a pas non plus d'attribut `station_id`, alors que `TemperatureReportDao` le passe au constructeur : la lecture des relevés échoue.
-- **`GeographicZone`** déclare deux fois `id` et `name`, dont une ligne `id; Optional[str]` sans effet. **`Region`** définit deux fois `add_department()`.
-- **`DjuCalculation`** :
-  - le calcul ponctuel n'utilise que la station la plus proche ;
-  - le calcul sur un territoire fait une moyenne simple des communes, sans interpolation entre stations ni pondération par la population.
-  
-  Il faut `run(daily_temperatures)`, qui reçoit les températures estimées par `TemperatureService`, et `run_for_zone(temperatures_by_municipality)`. Il manque aussi les attributs `altitude`, `number_of_stations` et `use_altitude`. `can_reuse_intermediate()` et `DjuResult.merge()` ne servent plus et peuvent être retirés.
-- **Pas de temps** : `_VALID_TIME_STEPS` (dans `dju.py`) et `TimeStep` (dans `dju_schema.py`) n'acceptent pas `week`, alors que le sujet demande des cumuls hebdomadaires.
-- **Relevés gardés dans les objets métier** : `MeteoStation.reports` et `get_reports()`, ainsi que `Municipality.stations` et `get_nearby_stations()`, gardent dans les objets des listes que les services doivent lire par la DAO. Ils sont à retirer.
-- **`Zoning.is_owned_by()`** n'existe pas.
-- **`User`** :
-  - `create_zoning(description)` utilise la description comme nom : il faut ajouter le paramètre `name` ;
-  - `get_calculations()`, `add_calculation()` et l'attribut `DjuCalculation.owner` sont à retirer si l'équipe ne garde pas d'historique des calculs.
-- **Services** : `temperature_service.py`, `zone_service.py` et `auth_service.py` sont vides. `DjuService` ne contient que `calculate_heating_dju()` et `calculate_cooling_dju()`, alors que les contrôleurs appellent `calculate_point_dju()` et `calculate_zone_dju()`.
-- **Schémas** :
-  - `ZoningCreateRequest` n'a pas de champ `name` ;
-  - `DjuZoneRequest` n'a ni `aggregation_level` ni `use_altitude`, deux paramètres exigés par le sujet pour F3 ;
-  - la réponse de F3 (`DjuResponse`) ne distingue pas les sous-zones.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés. Trois ajouts mineurs, absents du diagramme : les fonctions utilitaires `haversine_km` (`geo_zone.py`) et `period_bounds` (`dju.py`), et des méthodes privées dans les services (lecture des fichiers importés, contrôle du propriétaire).
 
 ## Modifications par rapport à la version précédente
 
@@ -298,6 +297,7 @@ erDiagram
         date date PK
         float temp_min "estimée (IDW)"
         float temp_max "estimée (IDW)"
+        boolean observed "calculée sans valeur comblée"
     }
 
     dju_types {
@@ -326,6 +326,8 @@ erDiagram
         date period_start
         date period_end
         float value
+        int days_with_data "jours calculés"
+        float observed_ratio "part de jours observés"
     }
 ```
 
@@ -369,18 +371,9 @@ La zone d'un calcul est désignée par le couple (`zone_type`, `zone_id`), car e
 
 Trois types de données sont volontairement exclus du stockage. Les calculs ponctuels sur un point GPS (F1) ne sont pas conservés : deux utilisateurs donnent très rarement les mêmes coordonnées, et ces résultats ne seraient presque jamais réutilisés. Les DJU journaliers ne sont pas stockés non plus, car ils dépendent du seuil, qui est libre, et se recalculent par une simple soustraction à partir des températures. Enfin, la liste des stations météo, consultée à chaque requête, est chargée une seule fois en mémoire au démarrage de l'API, ce qui évite de relire la table à chaque calcul.
 
-## Éléments faux ou à changer dans le code
+## État du code
 
-- **`init_db.sql`** :
-  - `temperature_reports` contient encore `temp_mean` et n'a pas `source_tmin` ni `source_tmax` ;
-  - la table `municipality_temperatures` n'existe pas ;
-  - `dju_calculations` contient `latitude`, `longitude` et `user_id`, mais pas `number_of_stations` ni `use_altitude` ;
-  - `dju_types` n'a pas de contrainte d'unicité sur (`mode`, `base_temperature`).
-- **Tables en double** : `communes` et `meteo_observations` reprennent, sans normalisation, les informations de `municipalities`, `meteo_stations` et `temperature_reports`. Ce sont elles que `fonction_utiles.py` remplit aujourd'hui. Elles sont à supprimer.
-- **`communes.py`** ne récupère ni le code INSEE ni la population des communes, ni les noms des départements et des régions. Les tables `municipalities`, `departments` et `regions` ne peuvent donc pas être remplies.
-- **`qualite_meteo.py`** traite les valeurs manquantes, mais n'enregistre pas le fichier Parquet nettoyé.
-- **`fonction_utiles.py`** retélécharge les données avec `fetch_communes()` et `fetch_meteo_data()` au lieu de lire les fichiers Parquet. Une fois ce script corrigé, `meteo_stations.py` ne sert plus et peut être supprimé.
-- **Accès à la base** : `dju_dao.py` est vide, et `GeoZoneDao` ne sait lire que des communes (pas de lecture des régions, des départements ni des zonages, et aucune écriture).
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés. Les anciennes tables `communes` et `meteo_observations` ne sont plus créées par `init_db.sql` ; si elles existent encore dans une base, elles ne sont plus utilisées et peuvent être supprimées.
 
 ## Modifications par rapport à la version précédente
 
@@ -435,11 +428,9 @@ sequenceDiagram
 
 L'initialisation est lancée une seule fois par l'administrateur, en dehors de l'API, à l'aide de quatre scripts du dossier `data/`. `init_db.py` télécharge les relevés quotidiens de Météo-France, ne garde que les colonnes utiles et les dates postérieures au 1er janvier 1990, puis les enregistre dans un fichier Parquet brut. `qualite_meteo.py` comble les valeurs manquantes et produit un Parquet nettoyé. `communes.py` récupère le référentiel des communes et leur altitude. Enfin, `fonction_utiles.py` crée les tables et y insère le territoire, les stations et les relevés. Chaque étape écrit son résultat dans un fichier : une erreur dans le nettoyage peut ainsi être corrigée sans retélécharger les données.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `qualite_meteo.py` n'enregistre pas le Parquet nettoyé (son bloc principal affiche seulement des statistiques).
-- `communes.py` ne récupère ni le code INSEE, ni la population, ni les noms des départements et des régions.
-- `fonction_utiles.py` ne lit pas les fichiers Parquet. Il retélécharge les données (`fetch_communes()`, et `fetch_meteo_data()` de `meteo_stations.py`) et remplit les tables `communes` et `meteo_observations`, au lieu de `regions`, `departments`, `municipalities`, `meteo_stations` et `temperature_reports`.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -475,7 +466,7 @@ sequenceDiagram
             Calc-->>DS: list[DjuResult]
         end
         DS-->>Ctrl: résultats
-        Ctrl-->>Client: 200 DjuResponse
+        Ctrl-->>Client: 200 DjuResponse (ou CSV si format=csv)
     end
 ```
 
@@ -483,14 +474,9 @@ sequenceDiagram
 
 Le contrôleur vérifie d'abord le format des paramètres (coordonnées, dates, nombre de stations) et renvoie une erreur 422 s'il est incorrect ; le service renvoie une erreur 400 si aucun seuil n'est fourni ou si les dates sont incohérentes. `DjuService` demande ensuite à `TemperatureService` d'estimer la température du point pour chaque jour de la période. Celui-ci lit les relevés des stations les plus proches, les corrige de l'écart d'altitude lorsque l'altitude du point est fournie et les combine par pondération inverse à la distance. Pour chaque seuil fourni (chauffage, climatisation ou les deux), un `DjuCalculation` calcule les DJU de chaque jour et les cumule selon le pas de temps. Aucun résultat n'est enregistré, car deux requêtes ont très rarement les mêmes coordonnées.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `DjuService.calculate_point_dju()` n'existe pas, et `TemperatureService` est vide.
-- Le contrôleur appelle `calculate_point_dju(request, user)` pour rattacher le calcul à l'historique de l'utilisateur. Les calculs ponctuels n'étant pas stockés, le paramètre `user` est à retirer (ou l'équipe décide de garder un historique, et le modèle de données doit alors changer).
-- `controllers/dependencies.py`, qui fournit `get_optional_user`, `SERVICE_ERRORS` et `http_error`, n'existe pas : le contrôleur ne peut pas être importé.
-- `TemperatureReportDao` crée des `TemperatureReport` avec un `station_id` que la classe ne connaît pas.
-- `DjuCalculation` calcule les DJU avec la seule station la plus proche, sans interpolation.
-- `TimeStep` n'accepte pas `week`.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -516,18 +502,18 @@ sequenceDiagram
     DB-->>DAO: lignes
     DAO-->>ZS: list[GeographicZone]
     ZS-->>Ctrl: list[GeographicZone]
-    Ctrl-->>Client: 200 list[ZoneResponse]
+    Ctrl-->>Client: 200 list[ZoneResponse] (sans les communes)
 ```
+
+Le détail d'une zone, avec la liste de ses communes, est donné par `GET /zones/{zone_type}/{zone_id}` (`ZoneDetailResponse`), qui passe par `ZoneService.get_zone()`.
 
 ### Explication
 
 Les zonages officiels sont publics : aucune authentification n'est demandée. Le paramètre `type` vaut `department`, `region` ou `all` ; toute autre valeur est refusée par le contrôleur avec une erreur 422. `ZoneService.list_public_zones()` renvoie les zones correspondantes, que le contrôleur transforme en `ZoneResponse`.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `ZoneService` est vide.
-- `GeoZoneDao` ne sait pas lire les régions ni les départements.
-- `main.py` n'enregistre pas les routeurs de `zone_controller.py` : la route `/zones` n'est pas accessible.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés. Le détail d'une zone, avec ses communes, est disponible sur `GET /zones/{zone_type}/{zone_id}`.
 
 ### Modifications par rapport à la version précédente
 
@@ -564,20 +550,16 @@ sequenceDiagram
         end
     end
     DS-->>Ctrl: résultats
-    Ctrl-->>Client: 200 DjuResponse
+    Ctrl-->>Client: 200 DjuZoneResponse (ou CSV si format=csv)
 ```
 
 ### Explication
 
 La requête précise la zone, la période, les seuils, le pas de temps, le niveau d'agrégation (`aggregation_level`) et l'indicateur d'altitude (`use_altitude`). `ZoneService` charge la zone, vérifie, s'il s'agit d'un zonage personnalisé, que l'utilisateur en est le propriétaire (erreur 401 sans jeton, 403 pour un autre utilisateur, 404 si la zone n'existe pas), puis la découpe selon le niveau d'agrégation : la zone elle-même, ses départements ou ses communes. Pour chaque sous-zone, le service cherche d'abord un calcul déjà stocké avec exactement les mêmes paramètres. S'il n'existe pas, `TemperatureService` fournit les températures de chaque commune, relues dans `municipality_temperatures` lorsqu'elles ont déjà été estimées, et `DjuCalculation.run_for_zone()` calcule les DJU de chaque commune puis les agrège par une moyenne pondérée par la population. Le calcul est enfin enregistré pour les requêtes suivantes.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `DjuService.calculate_zone_dju()` n'existe pas, et `TemperatureService` et `ZoneService` sont vides.
-- `DjuZoneRequest` n'a ni `aggregation_level` ni `use_altitude`, deux paramètres demandés par le sujet. Il n'accepte qu'un seul `zone_id`, alors que le sujet cite un « ensemble de régions » comme zone totale : il faut soit accepter une liste, soit passer par un zonage personnalisé.
-- `DjuResponse` indexe les résultats par mode seulement : il faut aussi les distinguer par sous-zone.
-- `DjuCalculation` fait une moyenne simple des communes avec la seule station la plus proche de chacune, au lieu de l'interpolation et de la pondération par la population.
-- `Zoning.is_owned_by()` et `ZoneService.get_sub_zones()` n'existent pas, et `dju_dao.py` est vide.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés. Un « ensemble de régions » se calcule en créant un zonage personnalisé : `DjuZoneRequest` ne porte qu'un seul `zone_id`.
 
 ### Modifications par rapport à la version précédente
 
@@ -607,20 +589,18 @@ sequenceDiagram
         AS-->>Ctrl: erreur
         Ctrl-->>Client: 401
     else mot de passe correct
-        AS-->>Ctrl: jeton d'accès
+        AS-->>Ctrl: jeton JWT
         Ctrl-->>Client: 200 TokenResponse
     end
 ```
 
 ### Explication
 
-`AuthService.authenticate()` retrouve l'utilisateur par son nom, compare le mot de passe reçu au mot de passe haché avec `User.check_password()`, puis renvoie un jeton d'accès. Ce jeton accompagne ensuite les requêtes qui concernent les zonages personnalisés, ce qui permet à l'API d'identifier l'utilisateur. L'inscription (`POST /user/register`, `register()`) suit le même chemin : le service vérifie que le nom est libre, hache le mot de passe avec bcrypt et enregistre le compte (erreur 409 si le nom est déjà pris).
+`AuthService.authenticate()` retrouve l'utilisateur par son nom, compare le mot de passe reçu au mot de passe haché avec `User.check_password()`, puis renvoie un jeton d'accès. Ce jeton est un JWT signé avec la clé `JWT_SECRET` du `.env` (bibliothèque `pyjwt`) et valable 24 heures : il n'est donc pas stocké en base. Il accompagne ensuite les requêtes qui concernent les zonages personnalisés, ce qui permet à l'API d'identifier l'utilisateur. L'inscription (`POST /user/register`, `register()`) suit le même chemin : le service vérifie que le nom est libre, hache le mot de passe avec bcrypt et enregistre le compte (erreur 409 si le nom est déjà pris).
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `AuthService` est vide.
-- `main.py` n'enregistre pas le routeur de `user_controller.py`.
-- `controllers/dependencies.py`, qui doit fournir `get_current_user` et la traduction des erreurs en codes HTTP, n'existe pas.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -657,14 +637,11 @@ sequenceDiagram
 
 ### Explication
 
-L'utilisateur, authentifié par son jeton (erreur 401 sinon), envoie le nom, la description et la liste des codes INSEE de son zonage. `ZoneService` retrouve chaque commune et refuse l'ensemble du zonage avec une erreur 400 si un code est inconnu, afin de ne jamais enregistrer un zonage incomplet. Le zonage est ensuite créé au nom de l'utilisateur (`User.create_zoning()`) et enregistré dans les tables `zonings` et `zoning_municipalities`. L'import depuis un fichier (FO3, `POST /user/zones/import`, `import_zoning()`) suit exactement le même scénario : le service commence simplement par lire les codes INSEE dans le fichier.
+L'utilisateur, authentifié par son jeton (erreur 401 sinon), envoie le nom, la description et la liste des codes INSEE de son zonage. `ZoneService` retrouve chaque commune et refuse l'ensemble du zonage avec une erreur 400 si un code est inconnu, afin de ne jamais enregistrer un zonage incomplet. Le zonage est ensuite créé au nom de l'utilisateur (`User.create_zoning()`) et enregistré dans les tables `zonings` et `zoning_municipalities`. L'import depuis un fichier (FO3, `POST /user/zones/import`, `import_zoning()`) suit exactement le même scénario : le service commence simplement par lire les codes INSEE dans le fichier. Pour rester simple, le contenu du fichier CSV ou JSON est envoyé sous forme de texte dans un corps JSON (`filename`, `content`, `name`, `description`), et non comme fichier uploadé ; sans `name`, le zonage prend le nom du fichier.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `ZoneService` est vide, et aucune méthode de la DAO n'enregistre un zonage.
-- `ZoningCreateRequest` et l'appel `create_zoning(user, description, codes_insee)` n'ont pas de `name`, alors que la colonne `zonings.name` est obligatoire.
-- `import_zoning(user, filename, content, description)` ne reçoit pas de nom non plus : il faut l'ajouter, ou décider que le nom du fichier sert de nom.
-- `User.create_zoning(description)` utilise la description comme nom.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -703,10 +680,9 @@ sequenceDiagram
 
 Seul le propriétaire d'un zonage peut le modifier ou le supprimer. `ZoneService` charge le zonage puis vérifie avec `Zoning.is_owned_by()` qu'il appartient à l'utilisateur (erreur 403 sinon, 404 si le zonage n'existe pas, 401 sans jeton). Une modification peut changer la description, ajouter des communes et en retirer, par leur code INSEE (`update_zoning(user, zoning_id, description, add_codes_insee, remove_codes_insee)`). Une suppression retire le zonage, et ses liens avec les communes disparaissent automatiquement grâce à `ON DELETE CASCADE`. Dans les deux cas, les calculs stockés pour ce zonage sont supprimés, car ils ne correspondent plus à son contenu.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `ZoneService` est vide, et `Zoning.is_owned_by()` n'existe pas.
-- Aucune méthode de la DAO ne lit, ne met à jour ou ne supprime un zonage, ni ne supprime les calculs stockés d'une zone.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -754,13 +730,9 @@ flowchart TD
 
 Le traitement enchaîne trois étapes séparées par des fichiers Parquet : téléchargement et filtrage, nettoyage, puis chargement en base. Lors du nettoyage, chaque valeur manquante est examinée selon la longueur du trou auquel elle appartient. Un trou de 30 jours au plus est comblé, par interpolation pour les trous courts et à l'aide des stations voisines pour les plus longs, et la valeur est marquée comme comblée. Au-delà, la valeur reste vide : l'inventer fausserait les DJU. Le référentiel des communes est récupéré ensuite, puis l'ensemble est inséré dans la base.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `filtrer_donnees_meteo()` garde encore les colonnes `TM` et `TNTXM`, qui ne servent pas au calcul des DJU.
-- Les trois défauts de la chaîne relevés pour le diagramme de séquence F0 s'appliquent aussi ici :
-  - `qualite_meteo.py` n'enregistre pas le Parquet nettoyé ;
-  - `communes.py` ne récupère ni le code INSEE ni la population ;
-  - `fonction_utiles.py` ne lit pas les fichiers Parquet et remplit les mauvaises tables.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -800,11 +772,9 @@ flowchart TD
 
 Cette activité est commune au calcul ponctuel (F1) et au calcul sur un territoire (F3), qui l'applique au centre de chaque commune. La correction d'altitude n'est appliquée que si l'altitude du lieu est fournie ; elle retire 0,65 °C par 100 m d'écart entre le lieu et la station. Les poids ne dépendent que des distances : ils sont calculés une fois pour toute la période. Lorsqu'une station n'a pas de valeur un jour donné, la moyenne de ce jour est faite sur les autres stations.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `TemperatureService` est vide : aucune interpolation entre stations n'est faite aujourd'hui.
-- `find_nearest_stations()` ne vérifie pas que les stations ont des relevés sur la période. Une station fermée peut donc être choisie et ne rien apporter.
-- La lecture des relevés échoue à cause de `station_id` (voir le diagramme de classes).
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés. Lorsqu'aucune station n'a de relevé, le calcul ponctuel renvoie une erreur 404.
 
 ### Modifications par rapport à la version précédente
 
@@ -846,11 +816,9 @@ flowchart TD
 
 Deux niveaux de validation précèdent le calcul : le format de chaque paramètre, contrôlé automatiquement par le schéma, puis la cohérence entre les paramètres, contrôlée par le service. Les températures sont estimées une seule fois, puis réutilisées pour chaque type de DJU : un calcul avec un seuil de chauffage et un seuil de climatisation ne lit donc les relevés qu'une fois.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `DjuService.calculate_point_dju()` n'existe pas : le contrôle des seuils et des dates n'est écrit nulle part.
-- `DjuCalculation` calcule les DJU à partir de la seule station la plus proche.
-- Le pas de temps `week` est refusé.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -903,11 +871,9 @@ flowchart TD
 
 Les contrôles d'accès sont faits avant tout calcul : une zone inexistante, ou un zonage personnalisé demandé par un autre utilisateur que son propriétaire, arrête le traitement. La zone est ensuite découpée selon le niveau d'agrégation, et chaque sous-zone est traitée à son tour. Le calcul utilise les deux niveaux de cache décrits dans le modèle de données : un résultat final déjà stocké est relu directement, et les températures déjà estimées pour une commune sont relues plutôt que recalculées. Les étapes du calcul sont répétées pour chaque type de DJU demandé.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `DjuZoneRequest` n'a ni `aggregation_level` ni `use_altitude`.
-- `DjuService.calculate_zone_dju()`, `ZoneService.get_sub_zones()` et `Zoning.is_owned_by()` n'existent pas.
-- `DjuCalculation` fait une moyenne simple des communes, sans pondération par la population.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -931,7 +897,7 @@ flowchart TD
     a1 --> m1{" "}
     a2 --> m1
     a3 --> m1
-    m1 --> out["Liste de ZoneResponse"]
+    m1 --> out["Liste de ZoneResponse (sans les communes)"]
     out --> fin(((" ")))
 
     classDef initial fill:#808080,stroke:#808080
@@ -946,9 +912,9 @@ flowchart TD
 
 Cette consultation est ouverte à tous et ne modifie aucune donnée. Elle permet à l'utilisateur de connaître les identifiants des régions et des départements avant de lancer un calcul sur un territoire (F3).
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `ZoneService.list_public_zones()` n'existe pas, `GeoZoneDao` ne lit ni les régions ni les départements, et la route n'est pas enregistrée dans `main.py`.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -989,10 +955,9 @@ flowchart TD
 
 La création et l'import ne diffèrent que par la façon d'obtenir les codes INSEE ; le reste du traitement est commun. Le zonage n'est enregistré que si toutes les communes existent, ce qui évite de créer un zonage partiellement faux sans que l'utilisateur s'en aperçoive.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- Le nom du zonage manque dans `ZoningCreateRequest`, dans `import_zoning()` et dans `User.create_zoning()`.
-- `ZoneService` est vide, et aucune méthode de la DAO n'enregistre un zonage.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 
@@ -1036,9 +1001,9 @@ flowchart TD
 
 Les trois contrôles (authentification, existence, propriété) sont faits dans cet ordre, avant toute modification. La dernière étape est commune aux deux actions : les résultats stockés pour l'ancien contenu du zonage sont supprimés, pour qu'un calcul ultérieur ne renvoie jamais un résultat qui ne correspond plus aux communes du zonage.
 
-### Éléments faux ou à changer dans le code
+### État du code
 
-- `Zoning.is_owned_by()` n'existe pas, `ZoneService` est vide, et aucune méthode de la DAO ne met à jour ou ne supprime un zonage ni ses calculs stockés.
+Le code suit ce diagramme : tous les écarts relevés dans la version précédente sont corrigés.
 
 ### Modifications par rapport à la version précédente
 

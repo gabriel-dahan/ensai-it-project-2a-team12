@@ -8,3 +8,6 @@
 doc/scripts/
 
 __pycache__
+.DS_Store
+*.pyc
+data/raw_data/

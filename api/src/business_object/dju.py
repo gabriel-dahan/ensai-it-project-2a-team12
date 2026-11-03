@@ -1,49 +1,44 @@
-""" computing DJU (Degrés Jours Unifiés).
-"""
+"""Calcul des DJU (degrés-jours unifiés)."""
 
-from __future__ import annotations
-
-from collections import defaultdict
+from calendar import monthrange
 from dataclasses import dataclass, field
-from datetime import date
-from typing import TYPE_CHECKING, Optional
+from datetime import date, timedelta
 
-if TYPE_CHECKING:
-    from .geo_zone import GeographicZone
-    from .meteo_station import MeteoStation
-    from .user import User
+from .geo_zone import GeographicZone
+from .meteo_station import MeteoStation
+from .temperature_report import TemperatureReport
 
-
-_VALID_TIME_STEPS = ("day", "month", "year")
+TIME_STEPS = ("day", "week", "month", "year")  # week = semaine ISO, du lundi au dimanche
 
 
-def _period_key(d: date, time_step: str) -> tuple:
+def period_bounds(day: date, time_step: str) -> tuple[date, date]:
+    """Début et fin (calendaires) de la période qui contient le jour."""
     if time_step == "day":
-        return (d.year, d.month, d.day)
+        return day, day
+    if time_step == "week":
+        start = day - timedelta(days=day.weekday())
+        return start, start + timedelta(days=6)
     if time_step == "month":
-        return (d.year, d.month)
+        last_day = monthrange(day.year, day.month)[1]
+        return date(day.year, day.month, 1), date(day.year, day.month, last_day)
     if time_step == "year":
-        return (d.year,)
-    raise ValueError(f"Unsupported time_step: {time_step!r}, expected one of {_VALID_TIME_STEPS}")
+        return date(day.year, 1, 1), date(day.year, 12, 31)
+    raise ValueError(f"Pas de temps inconnu : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
 
 
 @dataclass
 class DjuType:
-    id: Optional[int]
+    id: int | None
     name: str
     base_temperature: float
-    mode: str  # "heating" or "cooling"
+    mode: str  # "heating" ou "cooling"
 
     def compute_daily_value(self, t_min: float, t_max: float) -> float:
-        """DJU for a single day from that day's min/max temperature.
-
-        Uses the unified degree-day method: daily mean = (t_min + t_max) / 2,
-        then the departure from the base temperature, clamped at zero.
-        """
-        daily_mean = (t_min + t_max) / 2
+        """DJU d'un jour à partir de la moyenne (t_min + t_max) / 2."""
+        mean = (t_min + t_max) / 2
         if self.is_heating():
-            return max(0.0, self.base_temperature - daily_mean)
-        return max(0.0, daily_mean - self.base_temperature)
+            return max(0.0, self.base_temperature - mean)
+        return max(0.0, mean - self.base_temperature)
 
     def is_heating(self) -> bool:
         return self.mode == "heating"
@@ -54,107 +49,112 @@ class DjuType:
 
 @dataclass
 class DjuResult:
-    id: Optional[int]
+    id: int | None
     period_start: date
     period_end: date
     value: float
-
-    def merge(self, other: "DjuResult") -> "DjuResult":
-        """Combine two results into one covering their union period.
-
-        DJU values are additive over time, so the merged value is the sum.
-        Returns a new DjuResult rather than mutating either operand.
-        """
-        return DjuResult(
-            id=None,
-            period_start=min(self.period_start, other.period_start),
-            period_end=max(self.period_end, other.period_end),
-            value=self.value + other.value,
-        )
+    days_with_data: int  # jours de la période réellement calculés
+    observed_ratio: float  # part de ces jours calculés uniquement avec des mesures observées
 
 
 @dataclass
 class DjuCalculation:
-    id: Optional[int]
+    id: int | None
     start_date: date
     end_date: date
     time_step: str
     type: DjuType
-    # Exactly one of `zone` or (`latitude`, `longitude`) should be set.
-    zone: Optional["GeographicZone"] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    owner: Optional["User"] = None
-    computed_at: Optional[date] = None
+    zone: GeographicZone | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    altitude: float | None = None
+    number_of_stations: int = 3
+    use_altitude: bool = True
+    computed_at: date | None = None
     results: list[DjuResult] = field(default_factory=list)
-    # Candidate stations for a point-based calculation (no zone to derive
-    # them from).
-    candidate_stations: list["MeteoStation"] = field(default_factory=list) 
-    # Raw per-day DJU values, kept so aggregate() can be re-run with a
-    # different time_step without recomputing from temperature reports.
-    _daily_values: dict[date, float] = field(default_factory=dict, repr=False)
+    candidate_stations: list[MeteoStation] = field(default_factory=list)
+    # DJU de chaque jour : date -> (valeur, observé)
+    daily_values: dict[date, tuple[float, bool]] = field(default_factory=dict, init=False, repr=False, compare=False)
 
-    def run(self) -> list[DjuResult]:
-        if self.time_step not in _VALID_TIME_STEPS:
-            raise ValueError(f"Unsupported time_step: {self.time_step!r}")
+    def _is_usable(self, report: TemperatureReport) -> bool:
+        """Vrai si le relevé est dans la période et a ses deux températures."""
+        return (
+            self.start_date <= report.date <= self.end_date
+            and report.temp_min is not None
+            and report.temp_max is not None
+        )
 
-        self._daily_values = self._compute_daily_values()
+    def run(self, daily_temperatures: list[TemperatureReport]) -> list[DjuResult]:
+        """Calcule les DJU d'un point à partir de ses températures journalières."""
+        self.daily_values = {}
+        for report in daily_temperatures:
+            if self._is_usable(report):
+                value = self.type.compute_daily_value(report.temp_min, report.temp_max)
+                self.daily_values[report.date] = (value, report.observed)
+        self.results = self.aggregate(self.time_step)
+        self.computed_at = date.today()
+        return self.results
+
+    def run_for_zone(
+        self, temperatures_by_municipality: dict[str, list[TemperatureReport]]
+    ) -> list[DjuResult]:
+        """Calcule les DJU d'une zone : moyenne des communes pondérée par la population."""
+        if self.zone is None:
+            raise ValueError("run_for_zone demande une zone")
+        municipalities = self.zone.get_municipalities()
+
+        # Poids = population (0 si inconnue) ; si tous les poids sont nuls, poids 1 pour tous
+        weights = {m.insee_code: m.population if m.population and m.population > 0 else 0
+                   for m in municipalities}
+        if all(w == 0 for w in weights.values()):
+            weights = {code: 1 for code in weights}
+
+        weighted_sum: dict[date, float] = {}
+        weight_total: dict[date, float] = {}
+        observed: dict[date, bool] = {}
+        for code, weight in weights.items():
+            if weight == 0:
+                continue
+            for report in temperatures_by_municipality.get(code, []):
+                if not self._is_usable(report):
+                    continue
+                day = report.date
+                value = self.type.compute_daily_value(report.temp_min, report.temp_max)
+                weighted_sum[day] = weighted_sum.get(day, 0.0) + weight * value
+                weight_total[day] = weight_total.get(day, 0) + weight
+                observed[day] = observed.get(day, True) and report.observed
+
+        self.daily_values = {
+            day: (weighted_sum[day] / weight_total[day], observed[day]) for day in weighted_sum
+        }
         self.results = self.aggregate(self.time_step)
         self.computed_at = date.today()
         return self.results
 
     def aggregate(self, time_step: str) -> list[DjuResult]:
-        """Group the raw daily DJU values into periods of `time_step`.
+        """Cumule les DJU journaliers par jour, semaine, mois ou année."""
+        if time_step not in TIME_STEPS:
+            raise ValueError(f"Pas de temps inconnu : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
 
-        Can be called again with a different granularity than the one used
-        in run(), as long as run() has already populated the daily values.
-        """
-        if not self._daily_values:
-            raise RuntimeError("aggregate() called before any daily values were computed — call run() first")
-
-        groups: dict[tuple, list[date]] = defaultdict(list)
-        for day in self._daily_values:
-            groups[_period_key(day, time_step)].append(day)
+        # Clé = (début, fin) de la période, ramenés à [start_date, end_date]
+        groups: dict[tuple[date, date], list[tuple[float, bool]]] = {}
+        for day, day_value in self.daily_values.items():
+            start, end = period_bounds(day, time_step)
+            key = (max(start, self.start_date), min(end, self.end_date))
+            groups.setdefault(key, []).append(day_value)
 
         results = []
-        for days in groups.values():
-            days.sort()
-            total = sum(self._daily_values[d] for d in days)
-            results.append(DjuResult(id=None, period_start=days[0], period_end=days[-1], value=total))
+        for (start, end), values in groups.items():
+            nb_observed = sum(1 for _, is_observed in values if is_observed)
+            results.append(
+                DjuResult(
+                    id=None,
+                    period_start=start,
+                    period_end=end,
+                    value=sum(value for value, _ in values),
+                    days_with_data=len(values),
+                    observed_ratio=nb_observed / len(values),
+                )
+            )
         results.sort(key=lambda r: r.period_start)
         return results
-
-    def can_reuse_intermediate(self) -> bool:
-        """True if daily values are already computed and can be re-aggregated
-        with a different time_step instead of recomputing from scratch."""
-        return bool(self._daily_values)
-
-    def _compute_daily_values(self) -> dict[date, float]:
-        if self.zone is not None:
-            return self._compute_daily_values_for_zone()
-        if self.latitude is not None and self.longitude is not None:
-            return self._compute_daily_values_for_point()
-        raise ValueError("DjuCalculation needs either a zone or a (latitude, longitude) point")
-
-    def _compute_daily_values_for_zone(self) -> dict[date, float]:
-        per_day: dict[date, list[float]] = defaultdict(list)
-        for municipality in self.zone.get_municipalities():
-            nearest = municipality.get_nearby_stations(1)
-            if not nearest:
-                continue
-            for report in nearest[0].get_reports(self.start_date, self.end_date):
-                per_day[report.date].append(self.type.compute_daily_value(report.temp_min, report.temp_max))
-        # Zone-level daily value = average across the zone's municipalities.
-        return {day: sum(values) / len(values) for day, values in per_day.items()}
-
-    def _compute_daily_values_for_point(self) -> dict[date, float]:
-        if not self.candidate_stations:
-            return {}
-        nearest = min(
-            self.candidate_stations,
-            key=lambda s: s.distance_to(self.latitude, self.longitude),
-        )
-        return {
-            report.date: self.type.compute_daily_value(report.temp_min, report.temp_max)
-            for report in nearest.get_reports(self.start_date, self.end_date)
-        }

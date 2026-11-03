@@ -1,60 +1,70 @@
-"""
-Schemas used by the DJU API.
-"""
+"""Schémas des calculs de DJU (F1, F3)."""
 
 from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-TimeStep = Literal["day", "month", "year"]
+TimeStep = Literal["day", "week", "month", "year"]
+AggregationLevel = Literal["zone", "department", "municipality"]
+OutputFormat = Literal["json", "csv"]
 
 
 class DjuPointRequest(BaseModel):
-    """
-    Parameters required to calculate DJU for a geographic point.
-    At least one of heating_threshold / cooling_threshold must be given
-    (checked by DjuService, which answers 400 otherwise).
-    """
+    """Paramètres d'un calcul de DJU en un point (F1)."""
 
-    latitude: float = Field(..., ge=-90, le=90, description="Latitude of the requested location")
-    longitude: float = Field(..., ge=-180, le=180, description="Longitude of the requested location")
-    altitude: float | None = Field(
-        default=None,
-        description="Altitude of the requested location in metres (optional: no altitude correction without it)",
-    )
-    start_date: date = Field(..., description="Start date of the calculation period")
-    end_date: date = Field(..., description="End date of the calculation period")
-    heating_threshold: float | None = Field(default=None, description="Heating temperature threshold in °C")
-    cooling_threshold: float | None = Field(default=None, description="Cooling temperature threshold in °C")
-    number_of_stations: int = Field(default=3, ge=1, description="Number of weather stations used")
-    time_step: TimeStep = Field(default="day", description="Temporal aggregation: day, month or year")
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    altitude: float | None = Field(default=None, description="Altitude en mètres (facultative)")
+    start_date: date
+    end_date: date
+    heating_threshold: float | None = Field(default=None, description="Seuil de chauffage en °C")
+    cooling_threshold: float | None = Field(default=None, description="Seuil de climatisation en °C")
+    number_of_stations: int = Field(default=3, ge=1, le=10)
+    time_step: TimeStep = "day"
 
 
 class DjuZoneRequest(BaseModel):
-    """
-    Parameters required to calculate DJU for a zone: a department, a region,
-    or one of the caller's own zonings.
-    """
+    """Paramètres d'un calcul de DJU sur un territoire (F3)."""
 
-    zone_type: Literal["department", "region", "zoning"] = Field(..., description="Kind of zone")
-    zone_id: int = Field(..., description="Id of the department / region / personal zoning")
-    start_date: date = Field(..., description="Start date of the calculation period")
-    end_date: date = Field(..., description="End date of the calculation period")
-    heating_threshold: float | None = Field(default=None, description="Heating temperature threshold in °C")
-    cooling_threshold: float | None = Field(default=None, description="Cooling temperature threshold in °C")
-    number_of_stations: int = Field(default=3, ge=1, description="Number of weather stations used per municipality")
-    time_step: TimeStep = Field(default="day", description="Temporal aggregation: day, month or year")
+    zone_type: Literal["department", "region", "zoning"]
+    zone_id: int
+    aggregation_level: AggregationLevel = "zone"
+    start_date: date
+    end_date: date
+    heating_threshold: float | None = Field(default=None, description="Seuil de chauffage en °C")
+    cooling_threshold: float | None = Field(default=None, description="Seuil de climatisation en °C")
+    number_of_stations: int = Field(default=3, ge=1, le=10)
+    use_altitude: bool = True
+    time_step: TimeStep = "day"
 
 
 class DjuResultItem(BaseModel):
+    """Valeur de DJU sur une période."""
+
     period_start: date
     period_end: date
     value: float
+    days_with_data: int
+    observed_ratio: float
 
 
 class DjuResponse(BaseModel):
-    """One entry per requested threshold: 'heating' and/or 'cooling'."""
+    """Résultats d'un point, par mode ("heating" et/ou "cooling")."""
 
-    calculation_ids: dict[str, int | None]
     results: dict[str, list[DjuResultItem]]
+
+
+class DjuZoneResult(BaseModel):
+    """Résultats d'une sous-zone, par mode."""
+
+    zone_type: str
+    zone_id: int | None
+    name: str
+    results: dict[str, list[DjuResultItem]]
+
+
+class DjuZoneResponse(BaseModel):
+    """Résultats d'un territoire, une entrée par sous-zone."""
+
+    zones: list[DjuZoneResult]
