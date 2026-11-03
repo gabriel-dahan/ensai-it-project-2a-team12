@@ -1,0 +1,15 @@
+# Dépendances des scripts de data/ (installation : pip install -r data/requirements.txt)
+# meteo.py, communes.py
+requests
+pandas
+pyarrow
+# qualite_meteo.py
+numpy
+# init_db.py
+psycopg2-binary
+python-dotenv
+# data_visualisation.py
+duckdb
+rich
+# test_data.py
+pytest

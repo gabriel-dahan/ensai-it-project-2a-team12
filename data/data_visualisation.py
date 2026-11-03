@@ -3,6 +3,7 @@ Script d'inspection et de visualisation de fichiers Parquet dans la console.
 Utilise DuckDB pour la rapidité et Rich pour le rendu visuel.
 """
 
+from pathlib import Path
 from typing import Optional
 import duckdb
 from rich.console import Console
@@ -15,12 +16,10 @@ console = Console()
 # ==============================================================================
 # CONFIGURATION : MODIFIEZ VOS CHEMINS DE FICHIERS ICI
 # ==============================================================================
-PARQUET_METEO = (
-    "/home/onyxia/work/ensai-it-project-2a-team12/data/raw_data/meteo_france_1990_2026.parquet"
-)
-PARQUET_COMMUNES = (
-    "/home/onyxia/work/ensai-it-project-2a-team12/data/raw_data/communes.parquet"
-)
+DOSSIER_PARQUET = Path(__file__).resolve().parent / "raw_data"
+# as_posix() : chemins avec des "/" pour les requêtes DuckDB, quel que soit le système
+PARQUET_METEO = (DOSSIER_PARQUET / "meteo_france_1990_2026.parquet").as_posix()
+PARQUET_COMMUNES = (DOSSIER_PARQUET / "communes.parquet").as_posix()
 
 
 def display_parquet_summary(
@@ -144,7 +143,7 @@ if __name__ == "__main__":
 
     # 3. Requête spécifique 2 : Filtrer sur des dates précises
     query_2 = """
-        SELECT NUM_POSTE, DATE, TMEAN, TMIN, TMAX
+        SELECT NUM_POSTE, DATE, TMIN, TMAX
         FROM meteo
         WHERE DATE BETWEEN '2023-01-01' AND '2023-01-05'
         LIMIT 10
@@ -154,14 +153,15 @@ if __name__ == "__main__":
     # 4. Requête spécifique 3 : Croisement fictif (JOIN) entre Communes et Météo
     query_3 = """
         SELECT 
-            c.nom AS commune,
-            c.code_departement,
+            c.Commune AS commune,
+            c.Dept,
             m.NUM_POSTE,
             m.DATE,
-            m.TMEAN
+            m.TMIN,
+            m.TMAX
         FROM communes c
         CROSS JOIN meteo m
-        WHERE c.code_departement = '75'
+        WHERE c.Dept = '75'
           AND m.DATE = '2023-01-15'
         LIMIT 5
     """

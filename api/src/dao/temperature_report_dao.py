@@ -27,8 +27,8 @@ class TemperatureReportDao(metaclass=Singleton):
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 query = """
-                    SELECT id, station_id, date, temp_min, temp_max, temp_mean 
-                    FROM temperature_reports 
+                    SELECT id, station_id, date, temp_min, temp_max
+                    FROM temperature_reports
                     WHERE station_id = %s AND date BETWEEN %s AND %s
                     ORDER BY date ASC
                 """
@@ -44,7 +44,6 @@ class TemperatureReportDao(metaclass=Singleton):
                     date=row["date"],
                     temp_min=row["temp_min"],
                     temp_max=row["temp_max"],
-                    temp_mean=row["temp_mean"]
                 )
                 for row in res
             ]
@@ -63,7 +62,7 @@ class TemperatureReportDao(metaclass=Singleton):
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT id, station_id, date, temp_min, temp_max, temp_mean "
+                    "SELECT id, station_id, date, temp_min, temp_max "
                     "FROM temperature_reports WHERE station_id = %s "
                     "ORDER BY date DESC LIMIT 1",
                     (station_id,)
@@ -77,6 +76,5 @@ class TemperatureReportDao(metaclass=Singleton):
                 date=res["date"],
                 temp_min=res["temp_min"],
                 temp_max=res["temp_max"],
-                temp_mean=res["temp_mean"]
             )
         return None

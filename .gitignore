@@ -8,3 +8,6 @@
 doc/scripts/
 
 __pycache__
+
+# Fichiers Parquet générés par les scripts de data/ (plusieurs Go)
+data/raw_data/

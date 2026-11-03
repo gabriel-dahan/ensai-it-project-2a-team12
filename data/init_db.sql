@@ -1,3 +1,15 @@
+-- Schéma de la base, conforme au modèle de données de doc/new_diagram.md.
+-- Exécuté par data/init_db.py (F0). Les DROP réinitialisent toute la base,
+-- y compris les comptes et les zonages : à lancer une seule fois, avant d'utiliser l'API.
+
+DROP TABLE IF EXISTS
+    dju_results, dju_calculations, dju_types,
+    municipality_temperatures, temperature_reports, meteo_stations,
+    zoning_municipalities, zonings, users,
+    municipalities, departments, regions,
+    communes, meteo_observations  -- anciennes tables, remplacées par les tables normalisées
+CASCADE;
+
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
@@ -33,7 +45,7 @@ CREATE TABLE zonings (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     created_at DATE NOT NULL DEFAULT CURRENT_DATE,
-    user_id INTEGER NOT NULL REFERENCES users (id)
+    user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE zoning_municipalities (
@@ -51,19 +63,28 @@ CREATE TABLE meteo_stations (
     altitude DOUBLE PRECISION
 );
 
+-- La contrainte UNIQUE crée aussi l'index (station_id, date) utilisé pour lire
+-- les relevés d'une station sur une période.
 CREATE TABLE temperature_reports (
     id BIGSERIAL PRIMARY KEY,
     station_id INTEGER NOT NULL REFERENCES meteo_stations (id),
     date DATE NOT NULL,
     temp_min DOUBLE PRECISION,
     temp_max DOUBLE PRECISION,
-    temp_mean DOUBLE PRECISION,
+    source_tmin VARCHAR(30),
+    source_tmax VARCHAR(30),
     UNIQUE (station_id, date)
 );
 
-CREATE INDEX idx_temperature_reports_station_date
-    ON temperature_reports (station_id, date);
-
+-- Cache rempli par l'API : températures estimées d'une commune
+-- (3 stations, correction d'altitude).
+CREATE TABLE municipality_temperatures (
+    municipality_id INTEGER NOT NULL REFERENCES municipalities (id),
+    date DATE NOT NULL,
+    temp_min DOUBLE PRECISION,
+    temp_max DOUBLE PRECISION,
+    PRIMARY KEY (municipality_id, date)
+);
 
 CREATE TABLE dju_types (
     id SERIAL PRIMARY KEY,
@@ -73,21 +94,19 @@ CREATE TABLE dju_types (
     UNIQUE (mode, base_temperature)
 );
 
-
+-- zone_type vaut region, department, municipality ou zoning ; zone_id est l'id
+-- dans la table correspondante (pas de clé étrangère possible).
 CREATE TABLE dju_calculations (
     id SERIAL PRIMARY KEY,
+    dju_type_id INTEGER NOT NULL REFERENCES dju_types (id),
+    zone_type VARCHAR(32) NOT NULL,
+    zone_id INTEGER NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     time_step VARCHAR(16) NOT NULL,
-    computed_at DATE,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
-    dju_type_id INTEGER NOT NULL REFERENCES dju_types (id),
-    user_id INTEGER REFERENCES users (id),
-    zone_type VARCHAR(32),
-    zone_id INTEGER,
-    number_of_stations INTEGER,
-    use_altitude BOOLEAN
+    number_of_stations INTEGER NOT NULL,
+    use_altitude BOOLEAN NOT NULL,
+    computed_at DATE
 );
 
 CREATE TABLE dju_results (
@@ -97,33 +116,3 @@ CREATE TABLE dju_results (
     period_end DATE NOT NULL,
     value DOUBLE PRECISION NOT NULL
 );
-
--- Open-data tables filled by data/fonction_utiles.py.
-
-CREATE TABLE communes (
-    id SERIAL PRIMARY KEY,
-    nom VARCHAR(255),
-    code_postal VARCHAR(10),
-    code_departement VARCHAR(5),
-    code_region VARCHAR(5),
-    longitude FLOAT,
-    latitude FLOAT,
-    altitude FLOAT
-);
-
-CREATE TABLE meteo_observations (
-    id BIGSERIAL PRIMARY KEY,
-    num_poste VARCHAR(20) NOT NULL,
-    date DATE NOT NULL,
-    nom_usuel VARCHAR(255),
-    tmin FLOAT,
-    tmax FLOAT,
-    tmean FLOAT,
-    latitude FLOAT,
-    longitude FLOAT,
-    altitude FLOAT,
-    tmed_tn_tx FLOAT
-);
-
-CREATE INDEX idx_meteo_observations_poste_date
-    ON meteo_observations (num_poste, date);

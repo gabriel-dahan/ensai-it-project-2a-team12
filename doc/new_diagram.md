@@ -266,7 +266,7 @@ erDiagram
         varchar name
         text description
         date created_at
-        int user_id FK
+        int user_id FK "ON DELETE CASCADE"
     }
 
     zoning_municipalities {
@@ -337,11 +337,11 @@ La base de données conserve trois types d'informations : les données de réfé
 
 ### Origine des données
 
-Les données de référence sont chargées une seule fois par l'administrateur (F0), en plusieurs étapes. Le script `init_db.py` télécharge les relevés quotidiens de Météo-France par département, ne garde que les colonnes utiles et les dates à partir de 1990, puis enregistre le tout dans un fichier Parquet. Le script `qualite_meteo.py` relit ce fichier, traite les valeurs manquantes et produit un second fichier Parquet, nettoyé. De son côté, `communes.py` récupère le référentiel des communes (code INSEE, coordonnées, population) et leur altitude. Enfin, `fonction_utiles.py` lit ces fichiers et remplit les tables. Le format Parquet sert donc d'étape intermédiaire entre les scripts : il permet de relancer le nettoyage sans retélécharger plusieurs gigaoctets de données. L'API, elle, ne lit que PostgreSQL. Ce choix donne une seule source de données pendant les calculs, des index pour retrouver rapidement les relevés d'une station sur une période, et des clés étrangères qui garantissent la cohérence entre les tables.
+Les données de référence sont chargées une seule fois par l'administrateur (F0), en plusieurs étapes. Le script `meteo.py` télécharge les relevés quotidiens de Météo-France par département, ne garde que les colonnes utiles et les dates à partir de 1990, puis enregistre le tout dans un fichier Parquet. Le script `qualite_meteo.py` relit ce fichier, traite les valeurs manquantes et produit un second fichier Parquet, nettoyé. De son côté, `communes.py` récupère le référentiel des communes (code INSEE, coordonnées, population) et leur altitude. Enfin, `init_db.py` lit ces fichiers et remplit les tables. Le format Parquet sert donc d'étape intermédiaire entre les scripts : il permet de relancer le nettoyage sans retélécharger plusieurs gigaoctets de données. L'API, elle, ne lit que PostgreSQL. Ce choix donne une seule source de données pendant les calculs, des index pour retrouver rapidement les relevés d'une station sur une période, et des clés étrangères qui garantissent la cohérence entre les tables.
 
 ### Territoire et zonages
 
-Les tables `regions`, `departments` et `municipalities` reprennent la hiérarchie administrative : une région contient au moins un département, et un département au moins une commune. Chaque niveau est identifié par son code INSEE, déclaré unique, qui est la clé naturelle utilisée par l'utilisateur et par les fichiers d'import (FO3). La table `municipalities` contient les trois informations nécessaires au calcul sur un territoire (F3) : les coordonnées du centre de la commune, pour estimer sa température, l'altitude, pour corriger cette température, et la population, pour pondérer la moyenne. L'altitude peut être vide lorsque le service d'altimétrie ne l'a pas fournie ; dans ce cas, aucune correction n'est appliquée pour cette commune.
+Les tables `regions`, `departments` et `municipalities` reprennent la hiérarchie administrative : une région contient au moins un département, et un département au moins une commune. Chaque niveau est identifié par son code INSEE, déclaré unique, qui est la clé naturelle utilisée par l'utilisateur et par les fichiers d'import (FO3). La table `municipalities` contient les trois informations nécessaires au calcul sur un territoire (F3) : les coordonnées de la mairie (ou, à défaut, du centre de la commune), plus proches que le centre géométrique de l'endroit où vivent les habitants, pour estimer sa température, l'altitude, pour corriger cette température, et la population, pour pondérer la moyenne. L'altitude peut être vide lorsque le service d'altimétrie ne l'a pas fournie ; dans ce cas, aucune correction n'est appliquée pour cette commune.
 
 Un zonage personnalisé (F4) appartient à un seul utilisateur, d'où la clé étrangère `user_id` dans `zonings`. Comme un zonage contient plusieurs communes et qu'une commune peut appartenir à plusieurs zonages, la relation passe par la table de liaison `zoning_municipalities`, dont la clé primaire est le couple (`zoning_id`, `municipality_id`) : une commune ne peut donc pas être ajoutée deux fois au même zonage. L'option `ON DELETE CASCADE` supprime automatiquement ces liens lorsqu'un zonage est supprimé.
 
@@ -409,7 +409,7 @@ sequenceDiagram
     participant Pq as Fichiers Parquet
     participant DB as PostgreSQL
 
-    Admin->>Scripts: lancer init_db.py
+    Admin->>Scripts: lancer meteo.py
     Scripts->>Ext: télécharger les relevés Météo-France
     Ext-->>Scripts: relevés quotidiens
     Scripts->>Pq: écrire le Parquet brut
@@ -424,7 +424,7 @@ sequenceDiagram
     Ext-->>Scripts: communes
     Scripts->>Pq: écrire le Parquet des communes
 
-    Admin->>Scripts: lancer fonction_utiles.py
+    Admin->>Scripts: lancer init_db.py
     Scripts->>Pq: lire les fichiers Parquet
     Pq-->>Scripts: relevés et communes
     Scripts->>DB: créer les tables et insérer les données
@@ -433,7 +433,7 @@ sequenceDiagram
 
 ### Explication
 
-L'initialisation est lancée une seule fois par l'administrateur, en dehors de l'API, à l'aide de quatre scripts du dossier `data/`. `init_db.py` télécharge les relevés quotidiens de Météo-France, ne garde que les colonnes utiles et les dates postérieures au 1er janvier 1990, puis les enregistre dans un fichier Parquet brut. `qualite_meteo.py` comble les valeurs manquantes et produit un Parquet nettoyé. `communes.py` récupère le référentiel des communes et leur altitude. Enfin, `fonction_utiles.py` crée les tables et y insère le territoire, les stations et les relevés. Chaque étape écrit son résultat dans un fichier : une erreur dans le nettoyage peut ainsi être corrigée sans retélécharger les données.
+L'initialisation est lancée une seule fois par l'administrateur, en dehors de l'API, à l'aide de quatre scripts du dossier `data/`. `meteo.py` télécharge les relevés quotidiens de Météo-France, ne garde que les colonnes utiles et les dates postérieures au 1er janvier 1990, puis les enregistre dans un fichier Parquet brut. `qualite_meteo.py` comble les valeurs manquantes et produit un Parquet nettoyé. `communes.py` récupère le référentiel des communes et leur altitude. Enfin, `init_db.py` crée les tables et y insère le territoire, les stations et les relevés. Chaque étape écrit son résultat dans un fichier : une erreur dans le nettoyage peut ainsi être corrigée sans retélécharger les données.
 
 ### Éléments faux ou à changer dans le code
 
@@ -727,7 +727,8 @@ flowchart TD
     debut((" ")) --> a1("Télécharger les relevés de chaque département<br/>et supprimer les doublons<br/>telecharger_departement(dept)")
     a1 --> a2("Garder les colonnes utiles et les dates depuis 1990<br/>filtrer_donnees_meteo(chemin_gz)")
     a2 --> o1["Parquet brut"]
-    o1 --> d1{"Valeur manquante ?"}
+    o1 --> a0("Retirer les jours sans aucune température<br/>(stations qui ne mesurent que la pluie)")
+    a0 --> d1{"Valeur manquante ?"}
     d1 -->|"[non]"| m1{" "}
     d1 -->|"[oui]"| d2{"Trou de 30 jours au plus ?"}
     d2 -->|"[oui]"| a3("Combler la valeur et noter sa source<br/>traiter_valeurs_manquantes(df)")
@@ -738,8 +739,8 @@ flowchart TD
     o2 --> a5("Récupérer les communes et leur altitude<br/>fetch_communes()")
     a5 --> o3["Parquet des communes"]
     o3 --> a6("Créer les tables<br/>create_tables(conn)")
-    a6 --> a7("Insérer régions, départements et communes")
-    a7 --> a8("Insérer stations et relevés")
+    a6 --> a7("Insérer régions, départements et communes<br/>charger_territoire(conn, communes)")
+    a7 --> a8("Insérer stations et relevés<br/>charger_stations(conn, meteo), charger_releves(...)")
     a8 --> fin(((" ")))
 
     classDef initial fill:#808080,stroke:#808080
@@ -798,7 +799,7 @@ flowchart TD
 
 **Entrées** : la position du lieu, son altitude si elle est connue, la période et le nombre de stations. **Sortie** : une température minimale et une température maximale estimées pour chaque jour.
 
-Cette activité est commune au calcul ponctuel (F1) et au calcul sur un territoire (F3), qui l'applique au centre de chaque commune. La correction d'altitude n'est appliquée que si l'altitude du lieu est fournie ; elle retire 0,65 °C par 100 m d'écart entre le lieu et la station. Les poids ne dépendent que des distances : ils sont calculés une fois pour toute la période. Lorsqu'une station n'a pas de valeur un jour donné, la moyenne de ce jour est faite sur les autres stations.
+Cette activité est commune au calcul ponctuel (F1) et au calcul sur un territoire (F3), qui l'applique à la mairie de chaque commune. La correction d'altitude n'est appliquée que si l'altitude du lieu est fournie ; elle retire 0,65 °C par 100 m d'écart entre le lieu et la station. Les poids ne dépendent que des distances : ils sont calculés une fois pour toute la période. Lorsqu'une station n'a pas de valeur un jour donné, la moyenne de ce jour est faite sur les autres stations.
 
 ### Éléments faux ou à changer dans le code
 

@@ -1,20 +1,29 @@
 """Traitement des valeurs manquantes dans les séries météo journalières.
 
-Entrée : DataFrame consolidé produit par `init_db.py` (une ligne par station
-et par jour : NUM_POSTE, DATE, TMIN, TMAX, TMEAN, TMED_TN_TX, ...).
+Entrée : DataFrame consolidé produit par `meteo.py` (une ligne par station
+et par jour : NUM_POSTE, DATE, TMIN, TMAX, ...).
+
+Les lignes sans TMIN ni TMAX sont d'abord retirées : les fichiers Météo-France
+contiennent aussi des stations qui ne mesurent que la pluie.
 
 Les jours manquants prennent deux formes : absence de ligne (rattrapée par
 un reindex sur le calendrier complet) ou ligne à valeurs vides (`NaN`).
 Les deux sont ensuite traités de la même façon.
 
 Seuls TMIN et TMAX sont comblés, car ils servent au calcul du DJU.
-TMED_TN_TX est déduite de (TMIN + TMAX) / 2 ; TMEAN n'est pas traitée.
 
 Méthode de comblement, par paliers selon la longueur du trou :
     - 1 à 2 jours : interpolation linéaire ;
-    - 3 à 7 jours : 70 % tendance locale + 30 % moyenne des stations voisines ;
-    - 8 à 30 jours : régression linéaire sur les stations voisines ;
+    - 3 à 7 jours : 70 % tendance locale + 30 % moyenne des stations voisines,
+      corrigées de leur écart moyen avec la station ;
+    - 8 à 30 jours : régression linéaire sur les stations voisines qui ont
+      des mesures pendant tout le trou ;
     - au-delà de 30 jours : aucun comblement.
+
+Les voisines sont les 5 stations les plus proches, dans la France entière,
+mais à moins de 50 km : une station isolée a donc moins de voisines, voire aucune.
+
+Enfin, une valeur comblée qui donne TMIN > TMAX est retirée.
 
 Chaque valeur est accompagnée d'une colonne SOURCE_* indiquant son origine.
 """
@@ -31,6 +40,7 @@ LIMITE_GAP_MOYEN = 7  # jours
 LIMITE_GAP_LONG = 30  # jours, au-delà : rejeté
 
 NB_STATIONS_VOISINES = 5
+DISTANCE_MAX_VOISINES_KM = 50
 SEUIL_JOURS_AJUSTEMENT_REGRESSION = 30  # jours communs mini pour fiabiliser la régression
 
 
@@ -162,15 +172,15 @@ def _distance_km(lat1, lon1, lat2, lon2):
 
 
 def _calculer_voisinage(grille: pd.DataFrame, n: int) -> dict[str, list[str]]:
-    """Détermine les `n` stations les plus proches de chaque station.
+    """Détermine les `n` stations les plus proches de chaque station, à moins de 50 km.
 
     Args:
         grille: Grille journalière de toutes les stations.
-        n: Nombre de voisines à retenir.
+        n: Nombre maximal de voisines à retenir.
 
     Returns:
         Dictionnaire {NUM_POSTE: liste des NUM_POSTE voisins, du plus proche
-        au plus éloigné}.
+        au plus éloigné}. La liste peut contenir moins de `n` stations.
     """
     stations = _metadonnees_stations(grille)
     voisinage = {}
@@ -179,7 +189,8 @@ def _calculer_voisinage(grille: pd.DataFrame, n: int) -> dict[str, list[str]]:
         autres["DISTANCE_KM"] = _distance_km(
             station["LAT"], station["LON"], autres["LAT"], autres["LON"]
         )
-        voisinage[station["NUM_POSTE"]] = autres.nsmallest(n, "DISTANCE_KM")["NUM_POSTE"].tolist()
+        proches = autres[autres["DISTANCE_KM"] <= DISTANCE_MAX_VOISINES_KM]
+        voisinage[station["NUM_POSTE"]] = proches.nsmallest(n, "DISTANCE_KM")["NUM_POSTE"].tolist()
     return voisinage
 
 
@@ -205,6 +216,9 @@ def _combler_gaps_moyens(
 ) -> pd.DataFrame:
     """Comble les trous de 3 à 7 jours : 70 % tendance locale + 30 % moyenne des voisines.
 
+    Chaque voisine est d'abord ramenée au niveau de la station : on lui ajoute
+    l'écart moyen entre les deux stations (dû à l'altitude, à la côte...),
+    mesuré sur les jours où elles ont toutes les deux une mesure réelle.
     Un trou en début ou fin d'historique n'est pas comblé (pas de tendance locale).
 
     Args:
@@ -225,16 +239,13 @@ def _combler_gaps_moyens(
 
         tendance_locale = _tendance_locale(grille[colonne])
 
-        voisines_disponibles = [v for v in voisines if v in pivots[colonne].columns]
-        if voisines_disponibles:
-            moyenne_voisines = (
-                pivots[colonne]
-                .reindex(grille["DATE"])[voisines_disponibles]
-                .mean(axis=1)
-                .set_axis(grille.index)
-            )
-        else:
-            moyenne_voisines = pd.Series(index=grille.index, dtype=float)
+        cible = grille[colonne].where(grille[f"SOURCE_{colonne}"] == "observee")
+        voisines_alignees = (
+            pivots[colonne].reindex(index=grille["DATE"], columns=voisines).set_axis(grille.index)
+        )
+        # Une voisine sans aucun jour commun avec la station a un écart NaN et est ignorée
+        ecarts = pd.Series({v: (cible - voisines_alignees[v]).mean() for v in voisines})
+        moyenne_voisines = (voisines_alignees + ecarts).mean(axis=1)
 
         candidat = 0.7 * tendance_locale + 0.3 * moyenne_voisines
 
@@ -244,51 +255,52 @@ def _combler_gaps_moyens(
     return grille
 
 
-def _regression_multi_station(
-    grille: pd.DataFrame, colonne: str, pivot: pd.DataFrame, voisines: list[str]
-) -> pd.Series:
-    """Estime la température d'une station par régression sur ses voisines.
+def _regression_sur_trou(
+    cible: pd.Series, voisines_alignees: pd.DataFrame, jours_trou: pd.Index
+) -> pd.Series | None:
+    """Estime les valeurs d'un trou par régression sur les voisines.
 
+    Seules les voisines qui ont une mesure chaque jour du trou sont utilisées.
     Modèle : T_cible = a1*T_v1 + ... + ak*T_vk + b, ajusté sur les jours où
-    la cible et toutes les voisines ont une observation réelle.
+    la cible et ces voisines ont une observation réelle.
 
     Args:
-        grille: Grille journalière de la station cible.
-        colonne: Colonne de température à estimer ("TMIN" ou "TMAX").
-        pivot: Observations réelles DATE x NUM_POSTE pour cette colonne.
-        voisines: NUM_POSTE des stations voisines.
+        cible: Mesures réelles de la station (NaN ailleurs).
+        voisines_alignees: Mesures réelles des voisines, une colonne par voisine,
+            alignées sur les jours de la station.
+        jours_trou: Index des jours du trou à combler.
 
     Returns:
-        Série des valeurs estimées, entièrement NaN s'il y a moins de 2
-        voisines exploitables ou trop peu de jours communs.
+        Série des valeurs estimées sur les jours du trou, ou None si aucune
+        voisine n'est utilisable ou s'il y a trop peu de jours communs.
     """
-    voisines_disponibles = [v for v in voisines if v in pivot.columns]
-    if len(voisines_disponibles) < 2:
-        return pd.Series(index=grille.index, dtype=float)
+    utilisables = [
+        v for v in voisines_alignees.columns if voisines_alignees.loc[jours_trou, v].notna().all()
+    ]
+    if not utilisables:
+        return None
 
-    voisines_alignees = pivot.reindex(grille["DATE"])[voisines_disponibles].set_axis(grille.index)
-    cible = grille[colonne]
-
-    periode_ajustement = cible.notna() & voisines_alignees.notna().all(axis=1)
+    voisines_utilisables = voisines_alignees[utilisables]
+    periode_ajustement = cible.notna() & voisines_utilisables.notna().all(axis=1)
     if periode_ajustement.sum() < SEUIL_JOURS_AJUSTEMENT_REGRESSION:
-        return pd.Series(index=grille.index, dtype=float)
+        return None
 
     x_ajustement = np.column_stack(
-        [voisines_alignees.loc[periode_ajustement].to_numpy(), np.ones(periode_ajustement.sum())]
+        [voisines_utilisables[periode_ajustement].to_numpy(), np.ones(periode_ajustement.sum())]
     )
-    y_ajustement = cible.loc[periode_ajustement].to_numpy()
+    y_ajustement = cible[periode_ajustement].to_numpy()
     coefficients, *_ = np.linalg.lstsq(x_ajustement, y_ajustement, rcond=None)
 
-    periode_estimable = voisines_alignees.notna().all(axis=1)
-    x_tout = np.column_stack([voisines_alignees.to_numpy(), np.ones(len(voisines_alignees))])
-    estimation = pd.Series(x_tout @ coefficients, index=grille.index)
-    return estimation.where(periode_estimable)
+    x_trou = np.column_stack(
+        [voisines_utilisables.loc[jours_trou].to_numpy(), np.ones(len(jours_trou))]
+    )
+    return pd.Series(x_trou @ coefficients, index=jours_trou)
 
 
 def _combler_gaps_longs(
     grille: pd.DataFrame, pivots: dict[str, pd.DataFrame], voisines: list[str]
 ) -> pd.DataFrame:
-    """Comble les trous de 8 à 30 jours par régression multi-station.
+    """Comble les trous de 8 à 30 jours par régression multi-station, trou par trou.
 
     Args:
         grille: Grille journalière d'une station.
@@ -296,19 +308,30 @@ def _combler_gaps_longs(
         voisines: NUM_POSTE des stations voisines.
 
     Returns:
-        Copie de la grille avec les valeurs comblées, source "estimee_7_30j".
+        Copie de la grille avec les valeurs comblées, source "estimee_8_30j".
     """
     grille = grille.copy()
     for colonne in COLONNES_A_COMBLER:
-        eligible = grille[f"LONGUEUR_TROU_{colonne}"].between(LIMITE_GAP_MOYEN + 1, LIMITE_GAP_LONG)
+        eligible = grille[colonne].isna() & grille[f"LONGUEUR_TROU_{colonne}"].between(
+            LIMITE_GAP_MOYEN + 1, LIMITE_GAP_LONG
+        )
         if not eligible.any():
             continue
 
-        candidat = _regression_multi_station(grille, colonne, pivots[colonne], voisines)
+        # Seules les mesures réelles servent à l'ajustement, pas les valeurs déjà comblées
+        cible = grille[colonne].where(grille[f"SOURCE_{colonne}"] == "observee")
+        voisines_alignees = (
+            pivots[colonne].reindex(index=grille["DATE"], columns=voisines).set_axis(grille.index)
+        )
 
-        a_remplir = eligible & grille[colonne].isna() & candidat.notna()
-        grille.loc[a_remplir, colonne] = candidat[a_remplir]
-        grille.loc[a_remplir, f"SOURCE_{colonne}"] = "estimee_7_30j"
+        # Les jours consécutifs d'un même trou reçoivent le même numéro
+        numeros_trou = (eligible != eligible.shift()).cumsum()
+        for numero in numeros_trou[eligible].unique():
+            jours_trou = grille.index[eligible & (numeros_trou == numero)]
+            estimation = _regression_sur_trou(cible, voisines_alignees, jours_trou)
+            if estimation is not None:
+                grille.loc[jours_trou, colonne] = estimation
+                grille.loc[jours_trou, f"SOURCE_{colonne}"] = "estimee_8_30j"
     return grille
 
 
@@ -328,42 +351,42 @@ def _marquer_gaps_rejetes(grille: pd.DataFrame) -> pd.DataFrame:
     return grille
 
 
-def _deduire_tmed_tn_tx(grille: pd.DataFrame) -> pd.DataFrame:
-    """Déduit TMED_TN_TX = (TMIN + TMAX) / 2 lorsqu'elle est manquante.
+def _retirer_incoherences(grille: pd.DataFrame) -> pd.DataFrame:
+    """Retire les valeurs comblées qui donnent TMIN > TMAX.
 
-    Les valeurs observées ne sont jamais écrasées.
+    TMIN et TMAX sont comblés séparément et peuvent donc se croiser. Seules
+    les valeurs comblées sont retirées : une mesure réelle est toujours gardée.
 
     Args:
-        grille: Grille journalière avec TMIN et TMAX déjà comblées.
+        grille: Grille journalière de toutes les stations, après comblement.
 
     Returns:
-        Copie de la grille avec TMED_TN_TX_SOURCE valant "observee",
-        "deduite" ou "manquante".
+        Copie de la grille avec la source "rejetee_tmin_sup_tmax" sur ces valeurs.
     """
     grille = grille.copy()
-    manquante = grille["TMED_TN_TX"].isna()
-    deductible = manquante & grille["TMIN"].notna() & grille["TMAX"].notna()
-
-    grille.loc[deductible, "TMED_TN_TX"] = (
-        grille.loc[deductible, "TMIN"] + grille.loc[deductible, "TMAX"]
-    ) / 2
-
-    grille["TMED_TN_TX_SOURCE"] = "observee"
-    grille.loc[manquante, "TMED_TN_TX_SOURCE"] = "manquante"
-    grille.loc[deductible, "TMED_TN_TX_SOURCE"] = "deduite"
+    incoherent = grille["TMIN"] > grille["TMAX"]
+    for colonne in COLONNES_A_COMBLER:
+        a_retirer = incoherent & (grille[f"SOURCE_{colonne}"] != "observee")
+        grille.loc[a_retirer, colonne] = np.nan
+        grille.loc[a_retirer, f"SOURCE_{colonne}"] = "rejetee_tmin_sup_tmax"
     return grille
 
 
 def traiter_valeurs_manquantes(df: pd.DataFrame) -> pd.DataFrame:
-    """Comble les valeurs manquantes de TMIN et TMAX, puis déduit TMED_TN_TX.
+    """Comble les valeurs manquantes de TMIN et TMAX.
 
     Args:
         df: DataFrame consolidé, une ligne par station et par jour.
 
     Returns:
         DataFrame sur calendrier journalier complet, avec les colonnes de
-        suivi LONGUEUR_TROU_*, SOURCE_* et TMED_TN_TX_SOURCE.
+        suivi LONGUEUR_TROU_* et SOURCE_*.
     """
+    # Retire les jours sans aucune température : les stations qui ne mesurent
+    # que la pluie disparaissent, et chaque station ne couvre plus que la
+    # période où elle mesure vraiment la température.
+    df = df.dropna(subset=COLONNES_A_COMBLER, how="all")
+
     grille = pd.concat(
         (_initialiser_suivi(_grille_journaliere(s)) for _, s in df.groupby("NUM_POSTE")),
         ignore_index=True,
@@ -395,15 +418,20 @@ def traiter_valeurs_manquantes(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     grille = _marquer_gaps_rejetes(grille)
-    return _deduire_tmed_tn_tx(grille)
+    return _retirer_incoherences(grille)
 
 
 if __name__ == "__main__":
-    chemin_parquet = Path(__file__).resolve().parent / "raw_data" / "meteo_france_1990_2026.parquet"
-    df_brut = pd.read_parquet(chemin_parquet)
+    dossier = Path(__file__).resolve().parent / "raw_data"
+    df_brut = pd.read_parquet(dossier / "meteo_france_1990_2026.parquet")
+    # Colonnes encore présentes dans un Parquet brut généré avant leur retrait de meteo.py
+    df_brut = df_brut.drop(columns=["TMEAN", "TMED_TN_TX"], errors="ignore")
 
     df_traite = traiter_valeurs_manquantes(df_brut)
 
     print("TMIN:\n", df_traite["SOURCE_TMIN"].value_counts())
     print("TMAX:\n", df_traite["SOURCE_TMAX"].value_counts())
-    print("TMED_TN_TX:\n", df_traite["TMED_TN_TX_SOURCE"].value_counts())
+
+    chemin_sortie = dossier / "meteo_france_1990_2026_nettoye.parquet"
+    df_traite.to_parquet(chemin_sortie, index=False, engine="pyarrow", compression="snappy")
+    print(f"Fichier généré : {chemin_sortie}")
