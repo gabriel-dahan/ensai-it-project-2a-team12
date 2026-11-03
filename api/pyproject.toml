@@ -13,6 +13,8 @@ dependencies = [
     "python-dotenv",
     "bcrypt",
     "pyjwt",
+    "pandas",
+    "numpy",
 ]
 
 # Outils de développement

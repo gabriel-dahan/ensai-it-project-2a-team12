@@ -1,129 +1,153 @@
-"""Estimation des températures journalières d'un lieu à partir des stations proches."""
+"""Estimation des températures journalières de lieux à partir des stations proches."""
 
-from datetime import date, timedelta
+from datetime import date
 
+import numpy as np
+import pandas as pd
+
+from business_object.geo_zone import EARTH_RADIUS_KM, Municipality
 from business_object.meteo_station import MeteoStation
-from business_object.temperature_report import TemperatureReport
+from business_object.temperature_report import LAPSE_RATE
 from dao.meteo_station_dao import MeteoStationDao
-from dao.municipality_temperature_dao import MunicipalityTemperatureDao
-from dao.temperature_report_dao import TemperatureReportDao
+from dao.temperature_report_dao import REPORT_COLUMNS, TemperatureReportDao
 
-MIN_DISTANCE_KM = 0.01  # évite une division par zéro quand le point est sur la station
-CACHE_STATIONS = 3  # le cache des communes ne sert qu'avec 3 stations et l'altitude
+MIN_DISTANCE_KM = 0.01  # évite une division par zéro quand le lieu est sur la station
+MAX_CANDIDATES = 50  # stations les plus proches examinées pour chaque lieu
+
+# Un lieu : clé -> (latitude, longitude, altitude ou None si pas de correction d'altitude)
+Locations = dict[str, tuple[float, float, float | None]]
 
 
-def days_between(start_date: date, end_date: date) -> list[date]:
-    """Tous les jours de start_date à end_date inclus."""
-    return [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+def distances_km(lat: float, lon: float, latitudes: np.ndarray, longitudes: np.ndarray) -> np.ndarray:
+    """Distances (formule de Haversine) en km entre un point et un tableau de positions."""
+    lat1, lon1 = np.radians(lat), np.radians(lon)
+    lat2, lon2 = np.radians(latitudes), np.radians(longitudes)
+    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
 class TemperatureService:
-    """Sélection des stations, pondération inverse à la distance et cache des communes."""
+    """Sélection des stations et pondération inverse à la distance, pour plusieurs lieux à la fois."""
 
-    def __init__(self, station_dao=None, report_dao=None, cache_dao=None):
+    def __init__(self, station_dao=None, report_dao=None):
         self.station_dao = station_dao or MeteoStationDao()
         self.report_dao = report_dao or TemperatureReportDao()
-        self.cache_dao = cache_dao or MunicipalityTemperatureDao()
 
     def get_data_period(self) -> tuple[date | None, date | None]:
         """Première et dernière date des relevés disponibles."""
         return self.report_dao.get_date_range()
 
     def find_candidate_stations(
-        self, latitude, longitude, number_of_stations, start_date, end_date
-    ) -> list[MeteoStation]:
-        """Les number_of_stations stations les plus proches qui ont des relevés sur la période."""
-        nearest = self.station_dao.find_nearest_stations(
-            latitude, longitude, limit=number_of_stations * 3
-        )
-        if not nearest:
-            return []
-        with_reports = self.report_dao.get_stations_with_reports(
-            [station.id for station in nearest], start_date, end_date
-        )
-        candidates = [station for station in nearest if station.id in with_reports]
-        return candidates[:number_of_stations]
+        self, locations: Locations, number_of_stations: int, start_date: date, end_date: date
+    ) -> tuple[dict[str, list[MeteoStation]], pd.DataFrame]:
+        """Pour chaque lieu, ses number_of_stations stations les plus proches qui ont des relevés.
+
+        Renvoie aussi les relevés de toutes ces stations, lus une seule fois même si une
+        station sert à plusieurs lieux.
+        """
+        stations = self.station_dao.get_all_stations()
+        latitudes = np.array([s.latitude for s in stations])
+        longitudes = np.array([s.longitude for s in stations])
+
+        # Pour chaque lieu : indices des stations, de la plus proche à la plus éloignée
+        nearest = {
+            key: np.argsort(distances_km(lat, lon, latitudes, longitudes))[:MAX_CANDIDATES]
+            for key, (lat, lon, _) in locations.items()
+        }
+
+        loaded = set()  # stations dont les relevés sont déjà lus
+        without_data = set()  # stations sans aucun relevé sur la période
+        report_tables = []
+        while True:
+            chosen = {
+                key: self._first_stations(stations, indices, without_data, number_of_stations)
+                for key, indices in nearest.items()
+            }
+            to_load = {s.id for selection in chosen.values() for s in selection} - loaded
+            if not to_load:
+                break
+            # Une requête pour toutes les nouvelles stations ; celles qui n'ont rien sur la
+            # période sont écartées et remplacées au tour suivant par les suivantes
+            reports = self.report_dao.get_reports_dataframe(sorted(to_load), start_date, end_date)
+            report_tables.append(reports)
+            loaded |= to_load
+            without_data |= to_load - set(reports["station_id"])
+
+        if not report_tables:
+            return chosen, pd.DataFrame(columns=REPORT_COLUMNS)
+        return chosen, pd.concat(report_tables, ignore_index=True)
+
+    @staticmethod
+    def _first_stations(stations, indices, without_data, number_of_stations) -> list[MeteoStation]:
+        """Les number_of_stations premières stations de la liste triée, sauf celles sans données."""
+        selection = []
+        for i in indices:
+            if stations[i].id not in without_data:
+                selection.append(stations[i])
+                if len(selection) == number_of_stations:
+                    break
+        return selection
 
     def estimate_daily_temperatures(
-        self, latitude, longitude, altitude, stations, start_date, end_date
-    ) -> list[TemperatureReport]:
-        """Un relevé estimé par jour : moyenne pondérée par 1/d² des stations qui ont une valeur."""
-        if not stations:
-            return []
-        reports_by_station = self.report_dao.get_reports_for_stations(
-            [station.id for station in stations], start_date, end_date
-        )
+        self, locations: Locations, stations_by_location: dict[str, list[MeteoStation]], reports: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Température moyenne estimée de chaque lieu, jour par jour (pondération 1/d²).
 
-        # Pour chaque jour : sommes pondérées et sommes des poids de temp_min et temp_max
-        days = {}
-        for station in stations:
-            distance = max(station.distance_to(latitude, longitude), MIN_DISTANCE_KM)
-            weight = 1 / distance**2
-            for report in reports_by_station.get(station.id, []):
-                if altitude is not None and station.altitude is not None:
-                    report = report.apply_altitude_correction(altitude - station.altitude)
-                if report.temp_min is None and report.temp_max is None:
-                    continue
-                day = days.setdefault(
-                    report.date,
-                    {"min": 0.0, "min_w": 0.0, "max": 0.0, "max_w": 0.0, "observed": True},
-                )
-                if report.temp_min is not None:
-                    day["min"] += weight * report.temp_min
-                    day["min_w"] += weight
-                if report.temp_max is not None:
-                    day["max"] += weight * report.temp_max
-                    day["max_w"] += weight
-                if not report.observed:
-                    day["observed"] = False
+        Renvoie deux tableaux avec une ligne par date et une colonne par lieu :
+        les températures moyennes (NaN si aucune station n'a de valeur ce jour-là)
+        et un booléen vrai si toutes les valeurs utilisées ce jour-là sont observées.
+        """
+        # Une ligne par date, une colonne par station
+        means_by_station = reports.pivot(index="date", columns="station_id", values="temp_mean")
+        observed_by_station = reports.pivot(index="date", columns="station_id", values="observed").eq(True)
 
-        estimates = []
-        for day_date in sorted(days):
-            day = days[day_date]
-            estimates.append(
-                TemperatureReport(
-                    station_id=None,
-                    date=day_date,
-                    temp_min=day["min"] / day["min_w"] if day["min_w"] > 0 else None,
-                    temp_max=day["max"] / day["max_w"] if day["max_w"] > 0 else None,
-                    observed=day["observed"],
+        means, observed = {}, {}
+        for key, (lat, lon, altitude) in locations.items():
+            stations = stations_by_location.get(key, [])
+            if not stations:
+                continue
+            ids = [s.id for s in stations]
+            values = means_by_station[ids].to_numpy(dtype=float)  # jours x stations
+
+            if altitude is not None:
+                # Correction de -0,65 °C par 100 m ; aucune si l'altitude de la station est inconnue
+                station_altitudes = np.array(
+                    [s.altitude if s.altitude is not None else altitude for s in stations], dtype=float
                 )
+                values = values - LAPSE_RATE * (altitude - station_altitudes)
+
+            # Poids calculés une seule fois pour toute la période
+            distances = distances_km(
+                lat, lon, np.array([s.latitude for s in stations]), np.array([s.longitude for s in stations])
             )
-        return estimates
+            weights = 1 / np.maximum(distances, MIN_DISTANCE_KM) ** 2
+
+            # Chaque jour, seules les stations qui ont une valeur comptent
+            has_value = ~np.isnan(values)
+            weighted_sum = np.where(has_value, values * weights, 0.0).sum(axis=1)
+            weight_total = (has_value * weights).sum(axis=1)
+            with np.errstate(invalid="ignore"):
+                means[key] = weighted_sum / weight_total  # NaN si aucun poids ce jour-là
+            observed[key] = (~has_value | observed_by_station[ids].to_numpy()).all(axis=1)
+
+        index = means_by_station.index
+        columns = list(locations)
+        means_table = pd.DataFrame(means, index=index).reindex(columns=columns)
+        observed_table = pd.DataFrame(observed, index=index).reindex(columns=columns, fill_value=False)
+        return means_table, observed_table
 
     def get_municipality_temperatures(
-        self, municipality, start_date, end_date, number_of_stations=3, use_altitude=True
-    ) -> list[TemperatureReport]:
-        """Températures complètes (min et max) d'une commune, via le cache si possible."""
-        use_cache = number_of_stations == CACHE_STATIONS and use_altitude
-        all_days = days_between(start_date, end_date)
-
-        if use_cache:
-            cached = self.cache_dao.get_temperatures(municipality.id, start_date, end_date)
-            cached_days = {report.date for report in cached}
-            if all(day in cached_days for day in all_days):
-                return [r for r in cached if r.temp_min is not None and r.temp_max is not None]
-
-        stations = self.find_candidate_stations(
-            municipality.latitude, municipality.longitude, number_of_stations, start_date, end_date
-        )
-        if not stations:
-            return []
-        altitude = municipality.altitude if use_altitude else None
-        estimates = self.estimate_daily_temperatures(
-            municipality.latitude, municipality.longitude, altitude, stations, start_date, end_date
-        )
-
-        if use_cache:
-            # Une ligne par jour, vide si aucune estimation, pour ne plus recalculer ce jour-là
-            by_date = {report.date: report for report in estimates}
-            rows = [
-                by_date.get(day)
-                or TemperatureReport(
-                    station_id=None, date=day, temp_min=None, temp_max=None, observed=False
-                )
-                for day in all_days
-            ]
-            self.cache_dao.save_temperatures(municipality.id, rows)
-
-        return [r for r in estimates if r.temp_min is not None and r.temp_max is not None]
+        self,
+        municipalities: list[Municipality],
+        start_date: date,
+        end_date: date,
+        number_of_stations: int = 3,
+        use_altitude: bool = True,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Températures moyennes estimées de toutes les communes, une colonne par code INSEE."""
+        locations = {
+            m.insee_code: (m.latitude, m.longitude, m.altitude if use_altitude else None)
+            for m in municipalities
+        }
+        stations, reports = self.find_candidate_stations(locations, number_of_stations, start_date, end_date)
+        return self.estimate_daily_temperatures(locations, stations, reports)

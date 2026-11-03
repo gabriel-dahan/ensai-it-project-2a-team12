@@ -68,15 +68,6 @@ CREATE TABLE IF NOT EXISTS temperature_reports (
     UNIQUE (station_id, date)
 );
 
-CREATE TABLE IF NOT EXISTS municipality_temperatures (
-    municipality_id INTEGER NOT NULL REFERENCES municipalities (id),
-    date DATE NOT NULL,
-    temp_min DOUBLE PRECISION,
-    temp_max DOUBLE PRECISION,
-    observed BOOLEAN,
-    PRIMARY KEY (municipality_id, date)
-);
-
 CREATE TABLE IF NOT EXISTS dju_types (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
