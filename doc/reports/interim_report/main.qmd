@@ -93,10 +93,8 @@ www.ensai.fr\\
 \includegraphics[width=0.35\textwidth]{resources/ensai_logo.png}\\
 \vspace{0.4cm}
 
-{\Large\textsc{Rapport Intermédiaire}}\\
-\vspace{0.15cm}
-{\Large Dossier d'Analyse}\\
-
+{\Large\textsc{Rapport Final}}\\
+ 
 \vspace{1.0cm}
 
 \rule{\textwidth}{0.5mm}\\
@@ -272,7 +270,6 @@ Le diagramme des cas d'utilisation reprend les acteurs définis en section 1.1 e
 
 ![Cas d'utilisation de l'API DJU](resources/diagrams/use_case_diagram.png){fig-align="center" width="80%" fig-pos="H"}
 
-
 ## Modèle du domaine
 
 Le modèle du domaine structure les objets métier. `GeographicZone` factorise les zonages officiels : une région agrège des départements, un département agrège des communes. `Zoning` représente un territoire personnalisé associé à un `User`.
@@ -321,7 +318,6 @@ Les $n$ stations les plus proches sont sélectionnées ($n$ optionnel, défaut 3
 \caption{Estimation des températures locales}
 \label{fig:act-temp}
 \end{figure}
-
 
 ## F1 — Calcul d'un DJU ponctuel
 
@@ -439,7 +435,6 @@ Initialisation (F0), calculs F1 et F3, consultation publique (F2), authentificat
 \caption{DJU ponctuel (F1)}
 \end{minipage}
 \end{figure}
-
 \begin{figure}[H]
 \centering
 \begin{minipage}[b]{0.48\textwidth}
@@ -453,7 +448,6 @@ Initialisation (F0), calculs F1 et F3, consultation publique (F2), authentificat
 \caption{Zonages publics (F2)}
 \end{minipage}
 \end{figure}
-
 \begin{figure}[H]
 \centering
 \begin{minipage}[b]{0.48\textwidth}
@@ -467,7 +461,6 @@ Initialisation (F0), calculs F1 et F3, consultation publique (F2), authentificat
 \caption{Création (F4)}
 \end{minipage}
 \end{figure}
-
 \begin{figure}[H]
 \centering
 \begin{minipage}[b]{0.48\textwidth}
