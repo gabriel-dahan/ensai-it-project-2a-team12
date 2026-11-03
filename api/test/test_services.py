@@ -19,6 +19,8 @@ from service.zone_service import ZoneService
 
 DAY1 = date(2024, 1, 1)
 DAY2 = date(2024, 1, 2)
+FIRST_DATA_DAY = date(1990, 1, 1)  # période des relevés renvoyée par FakeTemperatureService
+LAST_DATA_DAY = date(2024, 12, 31)
 
 
 # ---------- Faux objets ----------
@@ -61,6 +63,9 @@ class FakeTemperatureService:
         self.temperatures = temperatures
         self.estimate_calls = 0
         self.municipality_calls = 0
+
+    def get_data_period(self):
+        return FIRST_DATA_DAY, LAST_DATA_DAY
 
     def find_candidate_stations(self, *args):
         return self.stations
@@ -333,6 +338,27 @@ def test_point_with_two_thresholds():
     assert temperatures.estimate_calls == 1  # températures estimées une seule fois
 
 
+def test_point_period_cut_to_available_data():
+    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5)
+    service = DjuService(FakeTemperatureService([station], []), make_zone_service(), FakeDjuDao())
+
+    result = service.calculate_point_dju(
+        point_request(start_date=date(1985, 6, 1), end_date=date(2030, 1, 1), heating_threshold=18)
+    )
+
+    assert result["heating"].start_date == FIRST_DATA_DAY
+    assert result["heating"].end_date == LAST_DATA_DAY
+
+
+def test_point_period_without_data_is_400():
+    service = DjuService(FakeTemperatureService([], []), make_zone_service(), FakeDjuDao())
+    with pytest.raises(ServiceError) as error:
+        service.calculate_point_dju(
+            point_request(start_date=date(2030, 1, 1), end_date=date(2030, 12, 31), heating_threshold=18)
+        )
+    assert error.value.status_code == 400
+
+
 # ---------- DjuService : zone ----------
 
 
@@ -393,6 +419,18 @@ def test_zone_by_municipality():
     )
 
     assert [c.zone.insee_code for c in result] == ["35238", "35047"]
+
+
+def test_zone_period_cut_before_cache_lookup():
+    temperatures = FakeTemperatureService([], [report(DAY1, 0.0, 10.0)])
+    service = DjuService(temperatures, make_zone_service(department=make_department()), FakeDjuDao())
+
+    result = service.calculate_zone_dju(
+        zone_request(cooling_threshold=None, end_date=date(2030, 1, 1)), None
+    )
+
+    # Le calcul (et donc sa clé de cache) porte sur la période réellement couverte
+    assert result[0].end_date == LAST_DATA_DAY
 
 
 # ---------- ZoneService ----------

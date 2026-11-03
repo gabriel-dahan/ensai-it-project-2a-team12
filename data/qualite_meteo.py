@@ -3,7 +3,8 @@
 Entrée : DataFrame consolidé produit par `meteo.py` (une ligne par station
 et par jour : NUM_POSTE, DATE, TMIN, TMAX, ...).
 
-Les lignes sans TMIN ni TMAX sont d'abord retirées : les fichiers Météo-France
+Les températures hors de [-50 ; 50] °C sont d'abord vidées (valeurs aberrantes).
+Les lignes sans TMIN ni TMAX sont ensuite retirées : les fichiers Météo-France
 contiennent aussi des stations qui ne mesurent que la pluie.
 
 Les jours manquants prennent deux formes : absence de ligne (rattrapée par
@@ -46,6 +47,29 @@ LIMITE_GAP_LONG = 30  # jours, au-delà : rejeté
 NB_STATIONS_VOISINES = 5
 DISTANCE_MAX_VOISINES_KM = 50
 SEUIL_JOURS_AJUSTEMENT_REGRESSION = 30  # jours communs mini pour fiabiliser la régression
+
+TEMPERATURE_MIN = -50.0  # °C, en dessous : valeur aberrante
+TEMPERATURE_MAX = 50.0  # °C, au-dessus : valeur aberrante
+
+
+def _retirer_valeurs_aberrantes(df: pd.DataFrame) -> pd.DataFrame:
+    """Remplace par NaN les températures hors de [-50 ; 50] °C.
+
+    Ces valeurs deviennent des trous, comblés ensuite comme les autres.
+
+    Args:
+        df: DataFrame consolidé, une ligne par station et par jour.
+
+    Returns:
+        Copie du DataFrame sans les valeurs aberrantes.
+    """
+    df = df.copy()
+    for colonne in COLONNES_A_COMBLER:
+        aberrant = df[colonne].notna() & ~df[colonne].between(TEMPERATURE_MIN, TEMPERATURE_MAX)
+        if aberrant.any():
+            print(f"{colonne} : {aberrant.sum()} valeurs aberrantes retirées")
+        df.loc[aberrant, colonne] = np.nan
+    return df
 
 
 def _longueur_trou(masque_manquant: pd.Series) -> pd.Series:
@@ -386,6 +410,8 @@ def traiter_valeurs_manquantes(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame sur calendrier journalier complet, avec les colonnes de
         suivi LONGUEUR_TROU_* et SOURCE_*.
     """
+    df = _retirer_valeurs_aberrantes(df)
+
     # Retire les jours sans aucune température : les stations qui ne mesurent
     # que la pluie disparaissent, et chaque station ne couvre plus que la
     # période où elle mesure vraiment la température.

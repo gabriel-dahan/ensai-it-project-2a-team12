@@ -10,6 +10,22 @@ COLUMNS = "id, station_id, date, temp_min, temp_max, source_tmin, source_tmax"
 class TemperatureReportDao(metaclass=Singleton):
     """Accès aux relevés quotidiens des stations."""
 
+    def __init__(self):
+        self._date_range = None
+
+    def get_date_range(self) -> tuple[date | None, date | None]:
+        """Renvoie la première et la dernière date des relevés, lues en base une seule fois."""
+        if self._date_range is None:
+            with DBConnection().connection as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT MIN(date) AS first_date, MAX(date) AS last_date "
+                        "FROM temperature_reports"
+                    )
+                    row = cursor.fetchone()
+            self._date_range = (row["first_date"], row["last_date"])
+        return self._date_range
+
     def get_reports_by_station_and_date_range(
         self, station_id: int, start_date: date, end_date: date
     ) -> list[TemperatureReport]:

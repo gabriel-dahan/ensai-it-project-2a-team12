@@ -25,6 +25,10 @@ class TemperatureService:
         self.report_dao = report_dao or TemperatureReportDao()
         self.cache_dao = cache_dao or MunicipalityTemperatureDao()
 
+    def get_data_period(self) -> tuple[date | None, date | None]:
+        """Première et dernière date des relevés disponibles."""
+        return self.report_dao.get_date_range()
+
     def find_candidate_stations(
         self, latitude, longitude, number_of_stations, start_date, end_date
     ) -> list[MeteoStation]:

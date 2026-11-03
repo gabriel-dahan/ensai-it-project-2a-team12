@@ -222,6 +222,17 @@ def test_point_json(client, dju_service):
     }]
 
 
+def test_point_warning_when_period_is_cut(client, dju_service):
+    # FakeDjuService calcule du 2024-01-01 au 2024-01-01 alors que POINT_BODY va jusqu'au 2024-01-02
+    response = client.post("/dju/point", json=POINT_BODY)
+    assert "2024-01-02" in response.json()["warning"]
+
+
+def test_zone_no_warning_when_period_is_complete(client, dju_service):
+    response = client.post("/dju/zone", json=ZONE_BODY)
+    assert response.json()["warning"] is None
+
+
 def test_point_csv(client, dju_service):
     response = client.post("/dju/point?format=csv", json=POINT_BODY)
     assert response.status_code == 200
