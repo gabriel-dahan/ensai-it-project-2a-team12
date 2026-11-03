@@ -6,11 +6,10 @@ from utils.singleton import Singleton
 
 
 class UserDao(metaclass=Singleton):
-    """Data Access Object for User
-    """
+    """Accès aux comptes utilisateurs."""
 
     def find_by_id(self, user_id: int) -> User | None:
-        """Return the user with this id, or None."""
+        """Renvoie l'utilisateur de cet id, ou None."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -22,7 +21,7 @@ class UserDao(metaclass=Singleton):
         return self._to_user(res) if res else None
 
     def find_by_username(self, username: str) -> User | None:
-        """Return the user with this username, or None."""
+        """Renvoie l'utilisateur de ce nom, ou None."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -34,9 +33,9 @@ class UserDao(metaclass=Singleton):
         return self._to_user(res) if res else None
 
     def create(self, user: User) -> User | None:
-        """Insert a user and set its id. Returns None if the username exists."""
+        """Enregistre l'utilisateur et renseigne son id ; None si le nom est déjà pris."""
         if user.id is not None:
-            raise ValueError("User already has an id; use update() instead")
+            raise ValueError("L'utilisateur a déjà un id : utiliser update()")
 
         try:
             with DBConnection().connection as connection:
@@ -57,7 +56,7 @@ class UserDao(metaclass=Singleton):
         return user
 
     def update(self, user: User) -> bool:
-        """Update username and password. Returns True if a row was updated."""
+        """Met à jour le nom et le mot de passe ; True si une ligne a changé."""
         if user.id is None:
             return False
 
@@ -75,7 +74,7 @@ class UserDao(metaclass=Singleton):
         return updated
 
     def delete(self, user_id: int) -> bool:
-        """Delete the user with this id. Returns True if a row was deleted."""
+        """Supprime l'utilisateur ; True si une ligne a été supprimée."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -85,4 +84,5 @@ class UserDao(metaclass=Singleton):
 
     @staticmethod
     def _to_user(row: dict) -> User:
-        return User.from_storage(row["id"], row["username"], row["password"])
+        """Transforme une ligne en User."""
+        return User.from_storage(user_id=row["id"], username=row["username"], password_hash=row["password"])

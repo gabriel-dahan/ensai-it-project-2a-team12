@@ -1,6 +1,4 @@
-"""
-API routes for registration and authentication (F4). Mounted under /user.
-"""
+"""Routes d'inscription et de connexion, montées sous /user."""
 
 from fastapi import APIRouter
 
@@ -13,10 +11,8 @@ service = AuthService()
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-async def register(request: RegisterRequest):
-    """
-    Create an account.
-    """
+def register(request: RegisterRequest):
+    """Crée un compte (409 si le nom est pris)."""
     try:
         user = service.register(request.username, request.password)
     except SERVICE_ERRORS as exc:
@@ -25,13 +21,10 @@ async def register(request: RegisterRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    """
-    Check the credentials and open a session (401 if they are wrong).
-    """
+def login(request: LoginRequest):
+    """Vérifie les identifiants et renvoie un jeton JWT (401 sinon)."""
     try:
         token = service.authenticate(request.username, request.password)
     except SERVICE_ERRORS as exc:
         raise http_error(exc) from exc
     return TokenResponse(access_token=token)
-    

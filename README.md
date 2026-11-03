@@ -57,9 +57,9 @@ The project is based on the ENSAI second-year computer science project template.
 The application follows a layered architecture:
 
 - business_object : dju.py, geo_zone.py, meteo_station.py, temperature_report.py, user.py
-- dao : db_connection.py, dju_dao.py, geo_zone_dao.py, meteo_station.py, temperature_report_dao.py, user_dao.py
-- service
-- view
+- dao : db_connection.py, dju_dao.py, geo_zone_dao.py, meteo_station_dao.py, municipality_temperature_dao.py, temperature_report_dao.py, user_dao.py, zoning_dao.py
+- service : auth_service.py, dju_service.py, errors.py, temperature_service.py, zone_service.py
+- controllers and schema : the API routes and the request / response formats
 
 This organization makes it possible to separate:
 
@@ -67,6 +67,17 @@ This organization makes it possible to separate:
 - data access;
 - business logic;
 - exposure of functionalities through the API.
+
+## Data pipeline
+
+The scripts of the `data/` folder are run once, in this order, before using the API (see `api/README.md` for the commands):
+
+1. `meteo.py` downloads the daily Météo-France records since 1990 and writes the raw Parquet file.
+2. `qualite_meteo.py` removes the stations that only measure rainfall, fills the gaps of up to 30 days (interpolation, then nearby stations within 50 km) and writes the cleaned Parquet file. The origin of each value is kept in `SOURCE_TMIN` / `SOURCE_TMAX`.
+3. `communes.py` downloads the regions, departments and municipalities (town hall coordinates, altitude, population).
+4. `init_db.py` creates the tables of `init_db.sql` and fills them from the Parquet files.
+
+`test_data.py` tests these scripts without network or database.
 
 ## Technologies
 

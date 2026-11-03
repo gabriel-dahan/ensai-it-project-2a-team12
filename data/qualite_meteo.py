@@ -32,6 +32,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+DOSSIER = Path(__file__).resolve().parent / "raw_data"
+FICHIER_BRUT = DOSSIER / "meteo_france_brut.parquet"
+FICHIER_NETTOYE = DOSSIER / "meteo_france_nettoye.parquet"
+
 COLONNES_A_COMBLER = ["TMIN", "TMAX"]
 COLONNES_METADONNEES_STATION = ["NUM_POSTE", "NOM_USUEL", "LAT", "LON", "ALTI"]
 
@@ -421,17 +425,22 @@ def traiter_valeurs_manquantes(df: pd.DataFrame) -> pd.DataFrame:
     return _retirer_incoherences(grille)
 
 
-if __name__ == "__main__":
-    dossier = Path(__file__).resolve().parent / "raw_data"
-    df_brut = pd.read_parquet(dossier / "meteo_france_1990_2026.parquet")
-    # Colonnes encore présentes dans un Parquet brut généré avant leur retrait de meteo.py
+def main() -> None:
+    df_brut = pd.read_parquet(FICHIER_BRUT)
+    # Colonnes encore présentes dans un Parquet brut généré par une ancienne version de meteo.py
     df_brut = df_brut.drop(columns=["TMEAN", "TMED_TN_TX"], errors="ignore")
 
-    df_traite = traiter_valeurs_manquantes(df_brut)
+    df = traiter_valeurs_manquantes(df_brut)
+    # Les jours sans aucune température (trous rejetés) ne servent pas en base
+    df = df[df["TMIN"].notna() | df["TMAX"].notna()]
+    df = df.drop(columns=[f"LONGUEUR_TROU_{c}" for c in COLONNES_A_COMBLER])
 
-    print("TMIN:\n", df_traite["SOURCE_TMIN"].value_counts())
-    print("TMAX:\n", df_traite["SOURCE_TMAX"].value_counts())
+    print("SOURCE_TMIN :\n", df["SOURCE_TMIN"].value_counts())
+    print("SOURCE_TMAX :\n", df["SOURCE_TMAX"].value_counts())
 
-    chemin_sortie = dossier / "meteo_france_1990_2026_nettoye.parquet"
-    df_traite.to_parquet(chemin_sortie, index=False, engine="pyarrow", compression="snappy")
-    print(f"Fichier généré : {chemin_sortie}")
+    df.to_parquet(FICHIER_NETTOYE, index=False)
+    print(f"Fichier écrit : {FICHIER_NETTOYE} ({len(df):,} lignes)")
+
+
+if __name__ == "__main__":
+    main()

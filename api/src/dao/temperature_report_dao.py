@@ -1,80 +1,81 @@
-from dao.db_connection import DBConnection
+from datetime import date
+
 from business_object.temperature_report import TemperatureReport
+from dao.db_connection import DBConnection
 from utils.singleton import Singleton
+
+COLUMNS = "id, station_id, date, temp_min, temp_max, source_tmin, source_tmax"
 
 
 class TemperatureReportDao(metaclass=Singleton):
-    """
-    Data Access Object for TemperatureReport.
+    """Accès aux relevés quotidiens des stations."""
 
-    This class handles all database operations related to temperature measurements,
-    focusing on retrieving historical data for DJU calculations.
-    """
-
-    def get_reports_by_station_and_date_range(self, station_id: int, start_date: str, end_date: str) -> list[TemperatureReport]:
-        """
-        Retrieves all temperature reports for a specific station within a date range.
-        This is the primary method used for DJU calculations.
-
-        Args:
-            station_id (int): The ID of the weather station.
-            start_date (str): The start date in 'YYYY-MM-DD' format.
-            end_date (str): The end date in 'YYYY-MM-DD' format.
-
-        Returns:
-            List[TemperatureReport]: A list of TemperatureReport objects.
-        """
-        with DBConnection().connection as connection:
-            with connection.cursor() as cursor:
-                query = """
-                    SELECT id, station_id, date, temp_min, temp_max
-                    FROM temperature_reports
-                    WHERE station_id = %s AND date BETWEEN %s AND %s
-                    ORDER BY date ASC
-                """
-                cursor.execute(query, (station_id, start_date, end_date))
-
-                res = cursor.fetchall()
-
-        if res:
-            return [
-                TemperatureReport(
-                    id=row["id"],
-                    station_id=row["station_id"],
-                    date=row["date"],
-                    temp_min=row["temp_min"],
-                    temp_max=row["temp_max"],
-                )
-                for row in res
-            ]
-        return []
-
-    def get_latest_report_for_station(self, station_id: int) -> TemperatureReport | None:
-        """
-        Retrieves the most recent temperature report for a given station.
-
-        Args:
-            station_id (int): The ID of the weather station.
-
-        Returns:
-            TemperatureReport | None: The latest report if found, otherwise None.
-        """
+    def get_reports_by_station_and_date_range(
+        self, station_id: int, start_date: date, end_date: date
+    ) -> list[TemperatureReport]:
+        """Renvoie les relevés d'une station sur la période, triés par date."""
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT id, station_id, date, temp_min, temp_max "
-                    "FROM temperature_reports WHERE station_id = %s "
-                    "ORDER BY date DESC LIMIT 1",
-                    (station_id,)
+                    f"SELECT {COLUMNS} FROM temperature_reports "
+                    "WHERE station_id = %s AND date BETWEEN %s AND %s "
+                    "ORDER BY date",
+                    (station_id, start_date, end_date),
                 )
-                res = cursor.fetchone()
+                rows = cursor.fetchall()
 
-        if res:
-            return TemperatureReport(
-                id=res["id"],
-                station_id=res["station_id"],
-                date=res["date"],
-                temp_min=res["temp_min"],
-                temp_max=res["temp_max"],
-            )
-        return None
+        return [self._to_report(row) for row in rows]
+
+    def get_reports_for_stations(
+        self, station_ids: list[int], start_date: date, end_date: date
+    ) -> dict[int, list[TemperatureReport]]:
+        """Renvoie les relevés de plusieurs stations en une requête : {station_id: relevés}."""
+        reports = {station_id: [] for station_id in station_ids}
+        if not station_ids:
+            return reports
+
+        with DBConnection().connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT {COLUMNS} FROM temperature_reports "
+                    "WHERE station_id = ANY(%s) AND date BETWEEN %s AND %s "
+                    "ORDER BY station_id, date",
+                    (list(station_ids), start_date, end_date),
+                )
+                rows = cursor.fetchall()
+
+        for row in rows:
+            reports.setdefault(row["station_id"], []).append(self._to_report(row))
+        return reports
+
+    def get_stations_with_reports(
+        self, station_ids: list[int], start_date: date, end_date: date
+    ) -> set[int]:
+        """Renvoie les ids des stations ayant au moins une température sur la période."""
+        if not station_ids:
+            return set()
+
+        with DBConnection().connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT DISTINCT station_id FROM temperature_reports "
+                    "WHERE station_id = ANY(%s) AND date BETWEEN %s AND %s "
+                    "AND (temp_min IS NOT NULL OR temp_max IS NOT NULL)",
+                    (list(station_ids), start_date, end_date),
+                )
+                rows = cursor.fetchall()
+
+        return {row["station_id"] for row in rows}
+
+    @staticmethod
+    def _to_report(row: dict) -> TemperatureReport:
+        """Transforme une ligne en TemperatureReport."""
+        observed = row["source_tmin"] in (None, "observee") and row["source_tmax"] in (None, "observee")
+        return TemperatureReport(
+            id=row["id"],
+            station_id=row["station_id"],
+            date=row["date"],
+            temp_min=row["temp_min"],
+            temp_max=row["temp_max"],
+            observed=observed,
+        )

@@ -1,23 +1,53 @@
-"""Fetch French municipalities from open data APIs."""
+"""Télécharge régions, départements et communes (avec altitude) et écrit les Parquet."""
 
-from __future__ import annotations
-import os
 from pathlib import Path
 
 import pandas as pd
 import requests
 
-URL_GEO = (
-    "https://geo.api.gouv.fr/communes"
-    "?fields=code,nom,population,codesPostaux,mairie,centre,departement,region&format=json"
-)
-URL_ALTI = "https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json"
-# Sans ce paramètre, l'API d'altimétrie répond 405 et aucune altitude n'est récupérée
-RESSOURCE_ALTI = "ign_rge_alti_wld"
-# Valeur renvoyée par l'API quand elle n'a pas d'altitude (point en mer par exemple)
-ALTITUDE_INCONNUE = -99999
-BATCH_SIZE = 250
 DOSSIER_DESTINATION = Path(__file__).resolve().parent / "raw_data"
+URL_GEO = "https://geo.api.gouv.fr"
+URL_ALTI = "https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json"
+BATCH_SIZE = 250
+
+
+def fetch_json(chemin: str) -> list[dict]:
+    """Appelle geo.api.gouv.fr et renvoie la réponse JSON."""
+    response = requests.get(f"{URL_GEO}{chemin}", timeout=300)
+    response.raise_for_status()
+    return response.json()
+
+
+def fetch_regions() -> pd.DataFrame:
+    """Régions : code, nom."""
+    return pd.DataFrame(fetch_json("/regions?fields=code,nom"))[["code", "nom"]]
+
+
+def fetch_departements() -> pd.DataFrame:
+    """Départements : code, nom, codeRegion."""
+    df = pd.DataFrame(fetch_json("/departements?fields=code,nom,codeRegion"))
+    return df[["code", "nom", "codeRegion"]]
+
+
+def fetch_altitudes(lons: list[float], lats: list[float]) -> list[float | None]:
+    """Altitudes d'un lot de points via l'API IGN (None si inconnue)."""
+    url = (
+        f"{URL_ALTI}?lon={'|'.join(map(str, lons))}&lat={'|'.join(map(str, lats))}"
+        "&resource=ign_rge_alti_wld&zonly=true"
+    )
+    try:
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+        altitudes = response.json()["elevations"]
+    except Exception:
+        if len(lons) == 1:
+            return [None]
+        # Un point hors couverture fait échouer tout le lot : on réessaie point par point
+        print(f"   -> erreur sur un lot, nouvel essai point par point ({len(lons)} points)")
+        return [fetch_altitudes([lon], [lat])[0] for lon, lat in zip(lons, lats)]
+    # L'IGN renvoie -99999 quand il ne connaît pas l'altitude
+    return [z if z is not None and z > -1000 else None for z in altitudes]
+
 
 def _coordonnees(commune: dict) -> list[float]:
     """Coordonnées [lon, lat] de la mairie, ou du centre de la commune si la mairie manque.
@@ -29,79 +59,53 @@ def _coordonnees(commune: dict) -> list[float]:
     return point["coordinates"]
 
 
-def fetch_communes() -> list[dict]:
-    """Download communes and enrich them with altitude.
+def fetch_communes() -> pd.DataFrame:
+    """Communes : code, nom, coordonnées, altitude, population, département, région."""
+    communes = fetch_json(
+        "/communes?fields=code,nom,mairie,centre,population,codeDepartement,codeRegion"
+    )
+    communes = [c for c in communes if c.get("mairie") or c.get("centre")]
+    print(f"{len(communes)} communes, calcul des altitudes...")
 
-    Returns:
-        List of dicts with keys: Code_Insee, Commune, Population, Code_Postal,
-        Dept, Nom_Dept, Region, Nom_Region, Lon, Lat, Altitude.
-    """
-    communes = [
-        c for c in requests.get(URL_GEO, timeout=120).json() if "mairie" in c or "centre" in c
-    ]
-    donnees: list[dict] = []
-
-    print(f"Début du traitement de {len(communes)} communes...")
-
+    lignes = []
     for i in range(0, len(communes), BATCH_SIZE):
         lot = communes[i : i + BATCH_SIZE]
-        lons = "|".join(str(_coordonnees(c)[0]) for c in lot)
-        lats = "|".join(str(_coordonnees(c)[1]) for c in lot)
-        url_get = f"{URL_ALTI}?lon={lons}&lat={lats}&resource={RESSOURCE_ALTI}"
+        lons = [_coordonnees(c)[0] for c in lot]
+        lats = [_coordonnees(c)[1] for c in lot]
+        altitudes = fetch_altitudes(lons, lats)
 
-        try:
-            response = requests.get(url_get, timeout=120)
-            if response.status_code == 200:
-                altis = response.json().get("elevations", [])
-            else:
-                print(f"Erreur API sur le lot {i}: {response.status_code}")
-                altis = []
-        except Exception as e:
-            print(f"Erreur réseau sur le lot {i}: {e}")
-            altis = []
-
-        for j, c in enumerate(lot):
-            liste_cp = c.get("codesPostaux", [])
-            code_postal = liste_cp[0] if liste_cp else ""
-            altitude = altis[j].get("z") if j < len(altis) else None
-            if altitude == ALTITUDE_INCONNUE:
-                altitude = None
-
-            donnees.append(
+        for c, lon, lat, alti in zip(lot, lons, lats, altitudes):
+            lignes.append(
                 {
-                    "Code_Insee": c.get("code"),
-                    "Commune": c.get("nom"),
-                    "Population": c.get("population"),
-                    "Code_Postal": code_postal,
-                    "Dept": c.get("departement", {}).get("code"),
-                    "Nom_Dept": c.get("departement", {}).get("nom"),
-                    "Region": c.get("region", {}).get("code"),
-                    "Nom_Region": c.get("region", {}).get("nom"),
-                    "Lon": _coordonnees(c)[0],
-                    "Lat": _coordonnees(c)[1],
-                    "Altitude": altitude,
+                    "code": c["code"],
+                    "nom": c["nom"],
+                    "latitude": lat,
+                    "longitude": lon,
+                    "altitude": alti,
+                    "population": c.get("population"),
+                    "codeDepartement": c.get("codeDepartement"),
+                    "codeRegion": c.get("codeRegion"),
                 }
             )
+        print(f"   {min(i + BATCH_SIZE, len(communes))} / {len(communes)}")
 
-        print(f"Progression : {min(i + BATCH_SIZE, len(communes))} / {len(communes)}")
+    df = pd.DataFrame(lignes)
+    df["population"] = df["population"].astype("Int64")
+    return df
 
-    return donnees
+
+def main() -> None:
+    DOSSIER_DESTINATION.mkdir(exist_ok=True)
+    tables = {
+        "regions": fetch_regions(),
+        "departements": fetch_departements(),
+        "communes": fetch_communes(),
+    }
+    for nom, df in tables.items():
+        chemin = DOSSIER_DESTINATION / f"{nom}.parquet"
+        df.to_parquet(chemin, index=False)
+        print(f"Fichier écrit : {chemin} ({len(df):,} lignes)")
 
 
 if __name__ == "__main__":
-    rows = fetch_communes()
-    print("Création du fichier Parquet...")
-    df = pd.DataFrame(rows)
-
-    df["Code_Postal"] = df["Code_Postal"].astype(str)
-    df["Dept"] = df["Dept"].astype(str)
-    df["Region"] = df["Region"].astype(str) 
-    # Export Parquet
-    os.makedirs(DOSSIER_DESTINATION, exist_ok=True)
-    chemin_parquet= os.path.join(DOSSIER_DESTINATION, "communes.parquet")
-    df.to_parquet(chemin_parquet,
-        index=False,
-        engine="pyarrow",
-        compression="snappy"
-    )
-    print("Fichier communes.parquet généré avec succès !")
+    main()

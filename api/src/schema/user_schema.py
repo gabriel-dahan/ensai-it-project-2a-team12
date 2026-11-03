@@ -1,6 +1,4 @@
-"""
-Schemas for registration and authentication.
-"""
+"""Schémas d'inscription et de connexion."""
 
 from pydantic import BaseModel, Field
 

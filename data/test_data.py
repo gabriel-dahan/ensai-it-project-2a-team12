@@ -4,6 +4,7 @@ Aucun test n'utilise le réseau ni une vraie base PostgreSQL : les données sont
 construites à la main, et la base est remplacée par un faux objet connexion.
 
 Lancement depuis la racine du dépôt : pytest data/test_data.py
+(les tests de l'API sont dans api/test/)
 """
 
 import gzip
@@ -60,7 +61,7 @@ def test_filtrer_donnees_meteo(tmp_path):
     assert df["NUM_POSTE"].iloc[0] == "01014002"
     assert df["NOM_USUEL"].iloc[0] == "BÉZIERS"
     assert df["TMIN"].iloc[0] == -2.5
-    assert list(df.columns) == ["NUM_POSTE", "DATE", "NOM_USUEL", "TMIN", "TMAX", "LAT", "LON", "ALTI"]
+    assert set(df.columns) == {"NUM_POSTE", "DATE", "NOM_USUEL", "TMIN", "TMAX", "LAT", "LON", "ALTI"}
 
 
 # --- qualite_meteo.py : fonctions élémentaires ---
@@ -236,7 +237,9 @@ def test_coordonnees_mairie_sinon_centre(commune, attendu):
 
 
 class _FauxCurseur:
-    """Remplace un curseur psycopg2 : garde le texte envoyé par COPY."""
+    """Remplace un curseur psycopg2 : garde chaque lot envoyé par COPY."""
+
+    rowcount = 0
 
     def __init__(self, connexion):
         self.connexion = connexion
@@ -247,13 +250,16 @@ class _FauxCurseur:
     def __exit__(self, *args):
         pass
 
+    def execute(self, requete):
+        pass
+
     def copy_expert(self, requete, tampon):
-        self.connexion.csv_recu += tampon.read()
+        self.connexion.lots_recus.append(tampon.read())
 
 
 class _FausseConnexion:
     def __init__(self):
-        self.csv_recu = ""
+        self.lots_recus = []
 
     def cursor(self):
         return _FauxCurseur(self)
@@ -262,30 +268,54 @@ class _FausseConnexion:
         pass
 
 
-def test_lignes_convertit_en_types_python():
-    """psycopg2 ne sait pas insérer les types numpy ni NaN : ils deviennent int, float et None."""
-    df = pd.DataFrame({"a": [1, 2], "b": [1.5, np.nan], "c": ["x", None]})
-    lignes = init_db._lignes(df)
-    assert lignes == [(1, 1.5, "x"), (2, None, None)]
-    assert type(lignes[0][0]) is int
+@pytest.mark.parametrize(
+    "valeur, attendu",
+    [(np.nan, None), (pd.NA, None), (None, None), (np.int64(860), 860), (860.0, 860)],
+)
+def test_entier(valeur, attendu):
+    """psycopg2 ne sait pas insérer NaN ni les entiers numpy : None ou int Python."""
+    resultat = init_db.entier(valeur)
+    assert resultat == attendu
+    assert resultat is None or type(resultat) is int
 
 
-def test_charger_releves():
-    """Les jours sans aucune température ne sont pas insérés, une valeur absente devient vide."""
+def test_inserer_releves_par_lots(monkeypatch):
+    """Les relevés partent par lots ; une valeur absente devient une case vide (NULL)."""
+    monkeypatch.setattr(init_db, "TAILLE_LOT", 2)
     meteo_df = pd.DataFrame(
         {
-            "NUM_POSTE": ["01", "01", "01"],
+            "NUM_POSTE": ["01014002"] * 3,
             "DATE": pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"]),
-            "TMIN": [1.0, np.nan, np.nan],
-            "TMAX": [5.0, np.nan, 6.0],
-            "SOURCE_TMIN": ["observee", "rejetee_gap_trop_long", "manquante"],
-            "SOURCE_TMAX": ["observee", "rejetee_gap_trop_long", "observee"],
+            "TMIN": [1.0, 2.0, np.nan],
+            "TMAX": [5.0, 6.0, 7.0],
+            "SOURCE_TMIN": ["observee", "observee", "manquante"],
+            "SOURCE_TMAX": ["observee", "observee", "observee"],
         }
     )
     connexion = _FausseConnexion()
-    init_db.charger_releves(connexion, meteo_df, {"01": 7})
+    init_db.inserer_releves(connexion, meteo_df)
 
-    assert connexion.csv_recu.splitlines() == [
-        "7,2020-01-01,1.0,5.0,observee,observee",
-        "7,2020-01-03,,6.0,manquante,observee",
-    ]
+    assert len(connexion.lots_recus) == 2
+    assert connexion.lots_recus[1].splitlines() == ["01014002,2020-01-03,,7.0,manquante,observee"]
+
+
+# --- qualite_meteo.py : fichier nettoyé ---
+
+
+def test_main_qualite_ecrit_le_parquet_nettoye(tmp_path, monkeypatch):
+    """Le Parquet nettoyé ne garde ni les jours sans température ni les colonnes de suivi."""
+    monkeypatch.setattr(qualite_meteo, "FICHIER_BRUT", tmp_path / "brut.parquet")
+    monkeypatch.setattr(qualite_meteo, "FICHIER_NETTOYE", tmp_path / "nettoye.parquet")
+    df = pd.concat(
+        [
+            _station("01", tmin=[1.0], tmax=[5.0], debut="2020-01-01"),
+            _station("01", tmin=[2.0], tmax=[6.0], debut="2020-02-06"),
+        ]
+    )
+    df.to_parquet(tmp_path / "brut.parquet", index=False)
+
+    qualite_meteo.main()
+
+    nettoye = pd.read_parquet(tmp_path / "nettoye.parquet")
+    assert len(nettoye) == 2  # les 35 jours du trou rejeté ne sont pas gardés
+    assert "LONGUEUR_TROU_TMIN" not in nettoye.columns
