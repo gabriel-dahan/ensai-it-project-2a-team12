@@ -12,6 +12,7 @@ import requests
 
 DOSSIER_DESTINATION = Path(__file__).resolve().parent / "raw_data"
 FICHIER_BRUT = DOSSIER_DESTINATION / "meteo_france_brut.parquet"
+DOSSIER_DEPARTEMENTS = DOSSIER_DESTINATION / "meteo_par_departement"  # reprise après une coupure
 URL_BASE = "https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/QUOT"
 
 DEPARTEMENTS = (
@@ -44,12 +45,21 @@ def filtrer_donnees_meteo(chemin_gz: Path) -> pd.DataFrame:
         dtype={"NUM_POSTE": str, "AAAAMMJJ": str},
     )
     df = df.rename(columns=COLONNES)
-    return df[df["DATE"] >= "19900101"]
+    df = df[df["DATE"] >= "19900101"]
+    # Lignes sans température (stations de pluie) : inutiles et lourdes en mémoire
+    return df.dropna(subset=["TMIN", "TMAX"], how="all")
 
 
 def telecharger_et_traiter(url: str, chemin_tmp: Path) -> pd.DataFrame | None:
-    """Télécharge un fichier, le filtre puis supprime le fichier temporaire."""
-    response = requests.get(url, timeout=600)
+    """Télécharge un fichier (3 essais), le filtre puis supprime le fichier temporaire."""
+    for essai in range(1, 4):
+        try:
+            response = requests.get(url, timeout=600)
+            break
+        except requests.RequestException as e:
+            print(f"   -> erreur réseau (essai {essai}/3) : {e}")
+    else:
+        raise RuntimeError(f"Téléchargement impossible : {url}. Relancer le script pour reprendre.")
     if response.status_code != 200:
         print(f"   -> fichier absent ({response.status_code}) : {url.rsplit('/', 1)[-1]}")
         return None
@@ -82,16 +92,22 @@ def telecharger_departement(dept: str) -> pd.DataFrame | None:
 
 
 def collecter_donnees_meteo(departements: list[str]) -> list[pd.DataFrame]:
-    """Télécharge les données de chaque département."""
+    """Télécharge les données de chaque département (déjà téléchargés : relus depuis le disque)."""
+    DOSSIER_DEPARTEMENTS.mkdir(parents=True, exist_ok=True)
     resultats = []
     for i, dept in enumerate(departements, start=1):
         print(f"[{i}/{len(departements)}] Département {dept}...")
-        df = telecharger_departement(dept)
-        if df is None:
-            print("   -> aucune donnée")
+        chemin = DOSSIER_DEPARTEMENTS / f"{dept}.parquet"
+        if chemin.exists():
+            df = pd.read_parquet(chemin)
         else:
-            resultats.append(df)
-            print(f"   -> {len(df):,} lignes")
+            df = telecharger_departement(dept)
+            if df is None:
+                print("   -> aucune donnée")
+                continue
+            df.to_parquet(chemin, index=False)
+        resultats.append(df)
+        print(f"   -> {len(df):,} lignes")
     return resultats
 
 

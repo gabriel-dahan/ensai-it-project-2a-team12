@@ -425,16 +425,49 @@ def traiter_valeurs_manquantes(df: pd.DataFrame) -> pd.DataFrame:
     return _retirer_incoherences(grille)
 
 
+def _code_departement(num_poste: str) -> str:
+    """Département d'une station : 2 premiers chiffres de NUM_POSTE (3 en outre-mer)."""
+    return num_poste[:3] if num_poste[:2] in ("97", "98") else num_poste[:2]
+
+
+def _stations_du_contexte(stations: pd.DataFrame, stations_dept: pd.DataFrame) -> pd.Series:
+    """Stations du département et celles à moins de 50 km d'une de ses stations."""
+    distances = _distance_km(
+        stations_dept["LAT"].to_numpy()[:, None],
+        stations_dept["LON"].to_numpy()[:, None],
+        stations["LAT"].to_numpy()[None, :],
+        stations["LON"].to_numpy()[None, :],
+    )
+    proches = (distances <= DISTANCE_MAX_VOISINES_KM).any(axis=0)
+    return stations.loc[proches, "NUM_POSTE"]
+
+
 def main() -> None:
+    """Traite un département à la fois pour limiter la mémoire.
+
+    Les voisines sont toujours à moins de 50 km : chaque département est traité
+    avec les stations proches en contexte, ce qui donne le même résultat qu'en une fois.
+    """
     df_brut = pd.read_parquet(FICHIER_BRUT)
     # Colonnes encore présentes dans un Parquet brut généré par une ancienne version de meteo.py
     df_brut = df_brut.drop(columns=["TMEAN", "TMED_TN_TX"], errors="ignore")
+    df_brut = df_brut.dropna(subset=COLONNES_A_COMBLER, how="all")
 
-    df = traiter_valeurs_manquantes(df_brut)
-    # Les jours sans aucune température (trous rejetés) ne servent pas en base
-    df = df[df["TMIN"].notna() | df["TMAX"].notna()]
-    df = df.drop(columns=[f"LONGUEUR_TROU_{c}" for c in COLONNES_A_COMBLER])
+    stations = df_brut.drop_duplicates("NUM_POSTE")[["NUM_POSTE", "LAT", "LON"]].reset_index(drop=True)
+    stations["DEPT"] = stations["NUM_POSTE"].map(_code_departement)
 
+    morceaux = []
+    for i, (dept, stations_dept) in enumerate(stations.groupby("DEPT"), start=1):
+        contexte = _stations_du_contexte(stations, stations_dept)
+        df = traiter_valeurs_manquantes(df_brut[df_brut["NUM_POSTE"].isin(contexte)])
+        df = df[df["NUM_POSTE"].isin(stations_dept["NUM_POSTE"])]
+        # Les jours sans aucune température (trous rejetés) ne servent pas en base
+        df = df[df["TMIN"].notna() | df["TMAX"].notna()]
+        morceaux.append(df.drop(columns=[f"LONGUEUR_TROU_{c}" for c in COLONNES_A_COMBLER]))
+        print(f"[{i}/{stations['DEPT'].nunique()}] Département {dept} : {len(morceaux[-1]):,} lignes")
+
+    del df_brut  # libère la mémoire avant l'assemblage
+    df = pd.concat(morceaux, ignore_index=True)
     print("SOURCE_TMIN :\n", df["SOURCE_TMIN"].value_counts())
     print("SOURCE_TMAX :\n", df["SOURCE_TMAX"].value_counts())
 
