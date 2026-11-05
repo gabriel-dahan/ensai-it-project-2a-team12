@@ -3,12 +3,12 @@
 from datetime import UTC, date, datetime, timedelta
 
 import jwt
+import pandas as pd
 import pytest
 
 from business_object.dju import DjuResult
 from business_object.geo_zone import Department, Municipality, Region, Zoning
 from business_object.meteo_station import MeteoStation
-from business_object.temperature_report import TemperatureReport
 from business_object.user import User
 from schema.dju_schema import DjuPointRequest, DjuZoneRequest
 from service.auth_service import AuthService
@@ -19,6 +19,8 @@ from service.zone_service import ZoneService
 
 DAY1 = date(2024, 1, 1)
 DAY2 = date(2024, 1, 2)
+FIRST_DATA_DAY = date(1990, 1, 1)  # période des relevés renvoyée par FakeTemperatureService
+LAST_DATA_DAY = date(2024, 12, 31)
 
 
 # ---------- Faux objets ----------
@@ -28,50 +30,52 @@ class FakeStationDao:
     def __init__(self, stations):
         self.stations = stations
 
-    def find_nearest_stations(self, lat, lon, limit=3):
-        return self.stations[:limit]
+    def get_all_stations(self):
+        return list(self.stations)
 
 
 class FakeReportDao:
+    """Relevés : {station_id: [(jour, température moyenne, observé), ...]}."""
+
     def __init__(self, reports_by_station):
         self.reports_by_station = reports_by_station
+        self.requested = []  # stations demandées, appel par appel
 
-    def get_reports_for_stations(self, station_ids, start_date, end_date):
-        return {i: self.reports_by_station.get(i, []) for i in station_ids}
-
-    def get_stations_with_reports(self, station_ids, start_date, end_date):
-        return {i for i in station_ids if self.reports_by_station.get(i)}
-
-
-class FakeCacheDao:
-    def __init__(self, rows=None):
-        self.rows = rows or []
-        self.saved = []
-
-    def get_temperatures(self, municipality_id, start_date, end_date):
-        return self.rows
-
-    def save_temperatures(self, municipality_id, reports):
-        self.saved.append((municipality_id, reports))
+    def get_reports_dataframe(self, station_ids, start_date, end_date):
+        self.requested.append(list(station_ids))
+        return reports_table({i: self.reports_by_station.get(i, []) for i in station_ids})
 
 
 class FakeTemperatureService:
-    def __init__(self, stations, temperatures):
+    """Renvoie les mêmes températures moyennes ({jour: moyenne}) pour tous les lieux."""
+
+    def __init__(self, stations, daily_means):
         self.stations = stations
-        self.temperatures = temperatures
+        self.daily_means = daily_means
         self.estimate_calls = 0
         self.municipality_calls = 0
 
-    def find_candidate_stations(self, *args):
-        return self.stations
+    def get_data_period(self):
+        return FIRST_DATA_DAY, LAST_DATA_DAY
 
-    def estimate_daily_temperatures(self, *args):
+    def find_candidate_stations(self, locations, *args):
+        return {key: self.stations for key in locations}, None
+
+    def estimate_daily_temperatures(self, locations, stations, reports):
         self.estimate_calls += 1
-        return self.temperatures
+        return self._tables(list(locations))
 
-    def get_municipality_temperatures(self, *args):
+    def get_municipality_temperatures(self, municipalities, *args):
         self.municipality_calls += 1
-        return self.temperatures
+        return self._tables([m.insee_code for m in municipalities])
+
+    def _tables(self, keys):
+        days = sorted(self.daily_means)
+        means = pd.DataFrame(
+            {key: [self.daily_means[d] for d in days] for key in keys}, index=days, dtype=float
+        )
+        observed = pd.DataFrame({key: [True] * len(days) for key in keys}, index=days)
+        return means, observed
 
 
 class FakeDjuDao:
@@ -166,10 +170,14 @@ def municipality(insee_code, population=100):
     )
 
 
-def report(day, t_min, t_max, observed=True, station_id=None):
-    return TemperatureReport(
-        station_id=station_id, date=day, temp_min=t_min, temp_max=t_max, observed=observed
-    )
+def reports_table(reports_by_station):
+    """Relevés au format de TemperatureReportDao.get_reports_dataframe."""
+    rows = [
+        (station_id, day, mean, observed)
+        for station_id, reports in reports_by_station.items()
+        for day, mean, observed in reports
+    ]
+    return pd.DataFrame(rows, columns=["station_id", "date", "temp_mean", "observed"])
 
 
 def make_zone_service(municipalities=(), department=None, region=None, zoning=None, dju_dao=None):
@@ -186,104 +194,99 @@ BOB = User.from_storage(user_id=2, username="bob", password_hash="x")
 
 # ---------- TemperatureService ----------
 
+# Sur l'équateur, A est à 0,1° et B à 0,2° du point (0, 0) : poids 1/d² dans le rapport 4 pour 1
+STATION_A = MeteoStation(id=1, station_code="A", name="A", latitude=0.0, longitude=0.1)
+STATION_B = MeteoStation(id=2, station_code="B", name="B", latitude=0.0, longitude=-0.2)
+ORIGIN = {"lieu": (0.0, 0.0, None)}
+
 
 def test_idw_two_stations():
-    # Sur l'équateur, A est à 0,1° et B à 0,2° : poids 1/d² dans le rapport 4 pour 1
-    station_a = MeteoStation(id=1, station_code="A", name="A", latitude=0.0, longitude=0.1)
-    station_b = MeteoStation(id=2, station_code="B", name="B", latitude=0.0, longitude=-0.2)
-    report_dao = FakeReportDao(
-        {1: [report(DAY1, 10.0, 20.0, station_id=1)], 2: [report(DAY1, 0.0, 15.0, False, 2)]}
-    )
-    service = TemperatureService(
-        station_dao=FakeStationDao([station_a, station_b]),
-        report_dao=report_dao,
-        cache_dao=FakeCacheDao(),
+    reports = reports_table({1: [(DAY1, 15.0, True)], 2: [(DAY1, 7.5, False)]})
+    service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
+
+    means, observed = service.estimate_daily_temperatures(
+        ORIGIN, {"lieu": [STATION_A, STATION_B]}, reports
     )
 
-    result = service.estimate_daily_temperatures(0.0, 0.0, None, [station_a, station_b], DAY1, DAY1)
-
-    assert len(result) == 1
-    assert result[0].temp_min == pytest.approx((4 * 10.0 + 0.0) / 5)  # 8.0
-    assert result[0].temp_max == pytest.approx((4 * 20.0 + 15.0) / 5)  # 19.0
-    assert result[0].observed is False
-    assert result[0].station_id is None
+    assert means.loc[DAY1, "lieu"] == pytest.approx((4 * 15.0 + 7.5) / 5)  # 13.5
+    assert not observed.loc[DAY1, "lieu"]  # B est une valeur comblée
 
 
 def test_idw_uses_only_stations_with_a_value():
-    station_a = MeteoStation(id=1, station_code="A", name="A", latitude=0.0, longitude=0.1)
-    station_b = MeteoStation(id=2, station_code="B", name="B", latitude=0.0, longitude=-0.2)
-    report_dao = FakeReportDao(
-        {1: [report(DAY1, None, 20.0, station_id=1)], 2: [report(DAY1, 2.0, 10.0, station_id=2)]}
+    reports = reports_table({1: [(DAY2, 10.0, True)], 2: [(DAY1, 6.0, True), (DAY2, 5.0, True)]})
+    service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
+
+    means, observed = service.estimate_daily_temperatures(
+        ORIGIN, {"lieu": [STATION_A, STATION_B]}, reports
     )
-    service = TemperatureService(FakeStationDao([]), report_dao, FakeCacheDao())
 
-    result = service.estimate_daily_temperatures(0.0, 0.0, None, [station_a, station_b], DAY1, DAY1)
-
-    assert result[0].temp_min == pytest.approx(2.0)
-    assert result[0].temp_max == pytest.approx(18.0)
+    assert means.loc[DAY1, "lieu"] == pytest.approx(6.0)  # A n'a pas de valeur le 1er
+    assert means.loc[DAY2, "lieu"] == pytest.approx((4 * 10.0 + 5.0) / 5)
+    assert observed.loc[DAY1, "lieu"]
 
 
 def test_altitude_correction():
     station = MeteoStation(id=1, station_code="A", name="A", latitude=0.0, longitude=0.1, altitude=100.0)
-    service = TemperatureService(
-        FakeStationDao([station]), FakeReportDao({1: [report(DAY1, 10.0, 20.0)]}), FakeCacheDao()
+    service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
+
+    means, _ = service.estimate_daily_temperatures(
+        {"lieu": (0.0, 0.0, 300.0)}, {"lieu": [station]}, reports_table({1: [(DAY1, 15.0, True)]})
     )
 
-    result = service.estimate_daily_temperatures(0.0, 0.0, 300.0, [station], DAY1, DAY1)
-
     # 200 m plus haut : -0,0065 x 200 = -1,3 °C
-    assert result[0].temp_min == pytest.approx(8.7)
-    assert result[0].temp_max == pytest.approx(18.7)
+    assert means.loc[DAY1, "lieu"] == pytest.approx(13.7)
+
+
+def test_location_without_station_gives_empty_column():
+    service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
+
+    means, _ = service.estimate_daily_temperatures(
+        {"A": (0.0, 0.0, None), "B": (0.0, 0.0, None)},
+        {"A": [STATION_A], "B": []},
+        reports_table({1: [(DAY1, 15.0, True)]}),
+    )
+
+    assert list(means.columns) == ["A", "B"]
+    assert means["B"].isna().all()
 
 
 def test_candidate_stations_skip_stations_without_reports():
     stations = [
         MeteoStation(id=i, station_code=str(i), name=None, latitude=0.0, longitude=0.1 * i)
-        for i in range(1, 5)
+        for i in range(1, 6)
     ]
-    report_dao = FakeReportDao({2: [report(DAY1, 1.0, 2.0)], 3: [report(DAY1, 1.0, 2.0)]})
-    service = TemperatureService(FakeStationDao(stations), report_dao, FakeCacheDao())
+    report_dao = FakeReportDao({3: [(DAY1, 1.0, True)], 5: [(DAY1, 2.0, True)]})
+    service = TemperatureService(FakeStationDao(stations), report_dao)
 
-    result = service.find_candidate_stations(0.0, 0.0, 1, DAY1, DAY1)
+    chosen, reports = service.find_candidate_stations(ORIGIN, 2, DAY1, DAY1)
 
-    assert [s.id for s in result] == [2]
-
-
-def test_municipality_temperatures_from_cache():
-    cache = FakeCacheDao([report(DAY1, 1.0, 5.0), report(DAY2, None, None)])
-    service = TemperatureService(FakeStationDao([]), FakeReportDao({}), cache)
-
-    result = service.get_municipality_temperatures(municipality("35238"), DAY1, DAY2)
-
-    assert [r.date for r in result] == [DAY1]
-    assert cache.saved == []
+    # 1 et 2 n'ont rien : remplacées par 3 et 4 ; 4 n'a rien non plus : remplacée par 5
+    assert [s.id for s in chosen["lieu"]] == [3, 5]
+    assert report_dao.requested == [[1, 2], [3, 4], [5]]
+    assert sorted(reports["station_id"]) == [3, 5]
 
 
-def test_municipality_temperatures_saved_in_cache():
-    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5)
-    cache = FakeCacheDao()
-    service = TemperatureService(
-        FakeStationDao([station]), FakeReportDao({1: [report(DAY1, 1.0, 5.0)]}), cache
+def test_station_shared_by_two_locations_is_read_once():
+    report_dao = FakeReportDao({1: [(DAY1, 1.0, True)], 2: [(DAY1, 2.0, True)]})
+    service = TemperatureService(FakeStationDao([STATION_A, STATION_B]), report_dao)
+    locations = {"X": (0.0, 0.05, None), "Y": (0.0, -0.05, None)}
+
+    chosen, _ = service.find_candidate_stations(locations, 2, DAY1, DAY1)
+
+    assert {s.id for s in chosen["X"]} == {s.id for s in chosen["Y"]} == {1, 2}
+    assert report_dao.requested == [[1, 2]]  # une seule requête pour les deux lieux
+
+
+def test_municipality_temperatures_one_column_per_municipality():
+    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5, altitude=0.0)
+    service = TemperatureService(FakeStationDao([station]), FakeReportDao({1: [(DAY1, 10.0, True)]}))
+
+    means, _ = service.get_municipality_temperatures(
+        [municipality("35238"), municipality("35047")], DAY1, DAY1, use_altitude=False
     )
 
-    result = service.get_municipality_temperatures(municipality("35238"), DAY1, DAY2)
-
-    assert len(result) == 1
-    saved_rows = cache.saved[0][1]
-    assert [r.date for r in saved_rows] == [DAY1, DAY2]  # une ligne par jour
-    assert saved_rows[1].temp_min is None
-
-
-def test_municipality_temperatures_not_cached_with_other_parameters():
-    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5)
-    cache = FakeCacheDao()
-    service = TemperatureService(
-        FakeStationDao([station]), FakeReportDao({1: [report(DAY1, 1.0, 5.0)]}), cache
-    )
-
-    service.get_municipality_temperatures(municipality("35238"), DAY1, DAY1, number_of_stations=2)
-
-    assert cache.saved == []
+    assert list(means.columns) == ["35238", "35047"]
+    assert means.loc[DAY1, "35238"] == pytest.approx(10.0)  # sans correction d'altitude
 
 
 # ---------- DjuService : point ----------
@@ -296,21 +299,21 @@ def point_request(**kwargs):
 
 
 def test_point_without_threshold_is_400():
-    service = DjuService(FakeTemperatureService([], []), make_zone_service(), FakeDjuDao())
+    service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
     with pytest.raises(ServiceError) as error:
         service.calculate_point_dju(point_request())
     assert error.value.status_code == 400
 
 
 def test_point_with_dates_in_wrong_order_is_400():
-    service = DjuService(FakeTemperatureService([], []), make_zone_service(), FakeDjuDao())
+    service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
     with pytest.raises(ServiceError) as error:
         service.calculate_point_dju(point_request(start_date=DAY2, end_date=DAY1, heating_threshold=18))
     assert error.value.status_code == 400
 
 
 def test_point_without_station_is_404():
-    service = DjuService(FakeTemperatureService([], []), make_zone_service(), FakeDjuDao())
+    service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
     with pytest.raises(ServiceError) as error:
         service.calculate_point_dju(point_request(heating_threshold=18))
     assert error.value.status_code == 404
@@ -318,9 +321,7 @@ def test_point_without_station_is_404():
 
 def test_point_with_two_thresholds():
     station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5)
-    temperatures = FakeTemperatureService(
-        [station], [report(DAY1, 0.0, 10.0), report(DAY2, 0.0, 10.0)]
-    )
+    temperatures = FakeTemperatureService([station], {DAY1: 5.0, DAY2: 5.0})
     service = DjuService(temperatures, make_zone_service(), FakeDjuDao())
 
     result = service.calculate_point_dju(
@@ -331,6 +332,27 @@ def test_point_with_two_thresholds():
     assert [r.value for r in result["heating"].results] == [pytest.approx(13.0)] * 2
     assert [r.value for r in result["cooling"].results] == [pytest.approx(3.0)] * 2
     assert temperatures.estimate_calls == 1  # températures estimées une seule fois
+
+
+def test_point_period_cut_to_available_data():
+    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5)
+    service = DjuService(FakeTemperatureService([station], {}), make_zone_service(), FakeDjuDao())
+
+    result = service.calculate_point_dju(
+        point_request(start_date=date(1985, 6, 1), end_date=date(2030, 1, 1), heating_threshold=18)
+    )
+
+    assert result["heating"].start_date == FIRST_DATA_DAY
+    assert result["heating"].end_date == LAST_DATA_DAY
+
+
+def test_point_period_without_data_is_400():
+    service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
+    with pytest.raises(ServiceError) as error:
+        service.calculate_point_dju(
+            point_request(start_date=date(2030, 1, 1), end_date=date(2030, 12, 31), heating_threshold=18)
+        )
+    assert error.value.status_code == 400
 
 
 # ---------- DjuService : zone ----------
@@ -357,7 +379,7 @@ def make_department():
 
 
 def test_zone_not_in_cache_is_computed_and_saved():
-    temperatures = FakeTemperatureService([], [report(DAY1, 0.0, 10.0)])
+    temperatures = FakeTemperatureService([], {DAY1: 5.0})
     dju_dao = FakeDjuDao(stored_id=None)
     service = DjuService(temperatures, make_zone_service(department=make_department()), dju_dao)
 
@@ -366,12 +388,12 @@ def test_zone_not_in_cache_is_computed_and_saved():
     assert len(result) == 2  # une sous-zone, deux modes
     assert result[0].results[0].value == pytest.approx(13.0)
     assert len(dju_dao.saved) == 2
-    assert temperatures.municipality_calls == 2  # une fois par commune, pas une fois par mode
+    assert temperatures.municipality_calls == 1  # une fois pour toutes les communes et les deux modes
 
 
 def test_zone_found_in_cache():
     stored = [DjuResult(id=1, period_start=DAY1, period_end=DAY1, value=42.0, days_with_data=1, observed_ratio=1.0)]
-    temperatures = FakeTemperatureService([], [])
+    temperatures = FakeTemperatureService([], {})
     dju_dao = FakeDjuDao(stored_id=5, stored_results=stored)
     service = DjuService(temperatures, make_zone_service(department=make_department()), dju_dao)
 
@@ -385,7 +407,7 @@ def test_zone_found_in_cache():
 
 
 def test_zone_by_municipality():
-    temperatures = FakeTemperatureService([], [report(DAY1, 0.0, 10.0)])
+    temperatures = FakeTemperatureService([], {DAY1: 5.0})
     service = DjuService(temperatures, make_zone_service(department=make_department()), FakeDjuDao())
 
     result = service.calculate_zone_dju(
@@ -393,6 +415,19 @@ def test_zone_by_municipality():
     )
 
     assert [c.zone.insee_code for c in result] == ["35238", "35047"]
+    assert temperatures.municipality_calls == 1  # une seule estimation pour les deux sous-zones
+
+
+def test_zone_period_cut_before_cache_lookup():
+    temperatures = FakeTemperatureService([], {DAY1: 5.0})
+    service = DjuService(temperatures, make_zone_service(department=make_department()), FakeDjuDao())
+
+    result = service.calculate_zone_dju(
+        zone_request(cooling_threshold=None, end_date=date(2030, 1, 1)), None
+    )
+
+    # Le calcul (et donc sa clé de cache) porte sur la période réellement couverte
+    assert result[0].end_date == LAST_DATA_DAY
 
 
 # ---------- ZoneService ----------

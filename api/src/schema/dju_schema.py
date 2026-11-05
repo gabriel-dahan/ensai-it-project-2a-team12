@@ -53,6 +53,7 @@ class DjuResponse(BaseModel):
     """Résultats d'un point, par mode ("heating" et/ou "cooling")."""
 
     results: dict[str, list[DjuResultItem]]
+    warning: str | None = Field(default=None, description="Présent si la période a été raccourcie")
 
 
 class DjuZoneResult(BaseModel):
@@ -68,3 +69,4 @@ class DjuZoneResponse(BaseModel):
     """Résultats d'un territoire, une entrée par sous-zone."""
 
     zones: list[DjuZoneResult]
+    warning: str | None = Field(default=None, description="Présent si la période a été raccourcie")

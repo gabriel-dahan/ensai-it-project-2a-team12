@@ -122,6 +122,24 @@ def test_trou_court_interpole():
     assert ligne["SOURCE_TMIN"] == "interpolee_1_2j"
 
 
+def test_valeur_aberrante_retiree_puis_comblee():
+    """Une température hors de [-50 ; 50] °C devient un trou, comblé comme les autres."""
+    df = _station("01", tmin=[10.0, -80.0, 14.0], tmax=[20.0, 21.0, 99.0])
+    resultat = qualite_meteo.traiter_valeurs_manquantes(df)
+    ligne = _ligne(resultat, "01", 1)
+    assert ligne["TMIN"] == 12.0
+    assert ligne["SOURCE_TMIN"] == "interpolee_1_2j"
+    assert np.isnan(_ligne(resultat, "01", 2)["TMAX"])  # fin de série : pas d'extrapolation
+
+
+def test_bornes_aberrantes_gardees():
+    """-50 °C et 50 °C sont des valeurs encore acceptées."""
+    df = _station("01", tmin=[-50.0], tmax=[50.0])
+    resultat = qualite_meteo._retirer_valeurs_aberrantes(df)
+    assert resultat.loc[0, "TMIN"] == -50.0
+    assert resultat.loc[0, "TMAX"] == 50.0
+
+
 def test_trou_en_debut_de_serie_non_comble():
     """Pas d'extrapolation : sans valeur avant le trou, la valeur reste manquante."""
     df = _station("01", tmin=[np.nan, 3.0, 4.0], tmax=[5.0, 6.0, 7.0])

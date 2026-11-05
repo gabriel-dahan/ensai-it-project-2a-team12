@@ -4,9 +4,11 @@ from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+import numpy as np
+import pandas as pd
+
 from .geo_zone import GeographicZone
 from .meteo_station import MeteoStation
-from .temperature_report import TemperatureReport
 
 TIME_STEPS = ("day", "week", "month", "year")  # week = semaine ISO, du lundi au dimanche
 
@@ -33,12 +35,14 @@ class DjuType:
     base_temperature: float
     mode: str  # "heating" ou "cooling"
 
-    def compute_daily_value(self, t_min: float, t_max: float) -> float:
-        """DJU d'un jour à partir de la moyenne (t_min + t_max) / 2."""
-        mean = (t_min + t_max) / 2
+    def compute_daily_value(self, t_mean):
+        """DJU d'un jour à partir de la température moyenne (Tmin + Tmax) / 2.
+
+        t_mean peut être un nombre ou un tableau pandas (une valeur par jour, voire par commune).
+        """
         if self.is_heating():
-            return max(0.0, self.base_temperature - mean)
-        return max(0.0, mean - self.base_temperature)
+            return np.maximum(0.0, self.base_temperature - t_mean)
+        return np.maximum(0.0, t_mean - self.base_temperature)
 
     def is_heating(self) -> bool:
         return self.mode == "heating"
@@ -76,29 +80,23 @@ class DjuCalculation:
     # DJU de chaque jour : date -> (valeur, observé)
     daily_values: dict[date, tuple[float, bool]] = field(default_factory=dict, init=False, repr=False, compare=False)
 
-    def _is_usable(self, report: TemperatureReport) -> bool:
-        """Vrai si le relevé est dans la période et a ses deux températures."""
-        return (
-            self.start_date <= report.date <= self.end_date
-            and report.temp_min is not None
-            and report.temp_max is not None
-        )
+    def run(self, daily_means: pd.Series, daily_observed: pd.Series) -> list[DjuResult]:
+        """Calcule les DJU d'un point à partir de ses températures moyennes journalières.
 
-    def run(self, daily_temperatures: list[TemperatureReport]) -> list[DjuResult]:
-        """Calcule les DJU d'un point à partir de ses températures journalières."""
-        self.daily_values = {}
-        for report in daily_temperatures:
-            if self._is_usable(report):
-                value = self.type.compute_daily_value(report.temp_min, report.temp_max)
-                self.daily_values[report.date] = (value, report.observed)
+        daily_means : température moyenne indexée par date (NaN si inconnue) ;
+        daily_observed : vrai si la valeur du jour ne repose que sur des mesures observées.
+        """
+        self._set_daily_values(self.type.compute_daily_value(daily_means), daily_observed)
         self.results = self.aggregate(self.time_step)
         self.computed_at = date.today()
         return self.results
 
-    def run_for_zone(
-        self, temperatures_by_municipality: dict[str, list[TemperatureReport]]
-    ) -> list[DjuResult]:
-        """Calcule les DJU d'une zone : moyenne des communes pondérée par la population."""
+    def run_for_zone(self, means: pd.DataFrame, observed: pd.DataFrame) -> list[DjuResult]:
+        """Calcule les DJU d'une zone : moyenne des communes pondérée par la population.
+
+        means et observed ont une ligne par date et une colonne par code INSEE ;
+        seules les colonnes des communes de la zone sont utilisées.
+        """
         if self.zone is None:
             raise ValueError("run_for_zone demande une zone")
         municipalities = self.zone.get_municipalities()
@@ -108,28 +106,33 @@ class DjuCalculation:
                    for m in municipalities}
         if all(w == 0 for w in weights.values()):
             weights = {code: 1 for code in weights}
+        weights = pd.Series({code: w for code, w in weights.items() if w > 0 and code in means.columns},
+                            dtype=float)
+        codes = list(weights.index)
 
-        weighted_sum: dict[date, float] = {}
-        weight_total: dict[date, float] = {}
-        observed: dict[date, bool] = {}
-        for code, weight in weights.items():
-            if weight == 0:
-                continue
-            for report in temperatures_by_municipality.get(code, []):
-                if not self._is_usable(report):
-                    continue
-                day = report.date
-                value = self.type.compute_daily_value(report.temp_min, report.temp_max)
-                weighted_sum[day] = weighted_sum.get(day, 0.0) + weight * value
-                weight_total[day] = weight_total.get(day, 0) + weight
-                observed[day] = observed.get(day, True) and report.observed
+        # DJU de chaque commune chaque jour, puis moyenne pondérée sur les communes qui ont une valeur
+        dju = self.type.compute_daily_value(means[codes])
+        has_value = dju.notna()
+        weighted_sum = dju.mul(weights, axis=1).sum(axis=1)
+        weight_total = has_value.mul(weights, axis=1).sum(axis=1)
+        daily_dju = weighted_sum / weight_total.where(weight_total > 0)
+        daily_observed = (observed[codes] | ~has_value).all(axis=1)
 
-        self.daily_values = {
-            day: (weighted_sum[day] / weight_total[day], observed[day]) for day in weighted_sum
-        }
+        self._set_daily_values(daily_dju, daily_observed)
         self.results = self.aggregate(self.time_step)
         self.computed_at = date.today()
         return self.results
+
+    def _set_daily_values(self, daily_dju: pd.Series, daily_observed: pd.Series) -> None:
+        """Garde les DJU journaliers connus et compris dans la période demandée."""
+        known = daily_dju.notna().to_numpy()
+        self.daily_values = {
+            day: (float(value), bool(is_observed))
+            for day, value, is_observed in zip(
+                daily_dju.index[known], daily_dju.to_numpy()[known], daily_observed.to_numpy()[known]
+            )
+            if self.start_date <= day <= self.end_date
+        }
 
     def aggregate(self, time_step: str) -> list[DjuResult]:
         """Cumule les DJU journaliers par jour, semaine, mois ou année."""

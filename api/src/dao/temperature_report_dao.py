@@ -1,14 +1,33 @@
 from datetime import date
 
+import pandas as pd
+
 from business_object.temperature_report import TemperatureReport
 from dao.db_connection import DBConnection
 from utils.singleton import Singleton
 
 COLUMNS = "id, station_id, date, temp_min, temp_max, source_tmin, source_tmax"
+REPORT_COLUMNS = ["station_id", "date", "temp_mean", "observed"]
 
 
 class TemperatureReportDao(metaclass=Singleton):
     """Accès aux relevés quotidiens des stations."""
+
+    def __init__(self):
+        self._date_range = None
+
+    def get_date_range(self) -> tuple[date | None, date | None]:
+        """Renvoie la première et la dernière date des relevés, lues en base une seule fois."""
+        if self._date_range is None:
+            with DBConnection().connection as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT MIN(date) AS first_date, MAX(date) AS last_date "
+                        "FROM temperature_reports"
+                    )
+                    row = cursor.fetchone()
+            self._date_range = (row["first_date"], row["last_date"])
+        return self._date_range
 
     def get_reports_by_station_and_date_range(
         self, station_id: int, start_date: date, end_date: date
@@ -26,46 +45,35 @@ class TemperatureReportDao(metaclass=Singleton):
 
         return [self._to_report(row) for row in rows]
 
-    def get_reports_for_stations(
+    def get_reports_dataframe(
         self, station_ids: list[int], start_date: date, end_date: date
-    ) -> dict[int, list[TemperatureReport]]:
-        """Renvoie les relevés de plusieurs stations en une requête : {station_id: relevés}."""
-        reports = {station_id: [] for station_id in station_ids}
+    ) -> pd.DataFrame:
+        """Renvoie en une requête les relevés de plusieurs stations sur la période.
+
+        Une ligne par station et par jour, seulement les jours qui ont Tmin et Tmax :
+        colonnes station_id, date, temp_mean = (Tmin + Tmax) / 2 et observed
+        (False si Tmin ou Tmax a été comblé par qualite_meteo.py).
+        """
         if not station_ids:
-            return reports
+            return pd.DataFrame(columns=REPORT_COLUMNS)
 
         with DBConnection().connection as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    f"SELECT {COLUMNS} FROM temperature_reports "
-                    "WHERE station_id = ANY(%s) AND date BETWEEN %s AND %s "
-                    "ORDER BY station_id, date",
+                    """
+                    SELECT station_id, date,
+                           (temp_min + temp_max) / 2 AS temp_mean,
+                           COALESCE(source_tmin, 'observee') = 'observee'
+                               AND COALESCE(source_tmax, 'observee') = 'observee' AS observed
+                    FROM temperature_reports
+                    WHERE station_id = ANY(%s) AND date BETWEEN %s AND %s
+                      AND temp_min IS NOT NULL AND temp_max IS NOT NULL
+                    """,
                     (list(station_ids), start_date, end_date),
                 )
                 rows = cursor.fetchall()
 
-        for row in rows:
-            reports.setdefault(row["station_id"], []).append(self._to_report(row))
-        return reports
-
-    def get_stations_with_reports(
-        self, station_ids: list[int], start_date: date, end_date: date
-    ) -> set[int]:
-        """Renvoie les ids des stations ayant au moins une température sur la période."""
-        if not station_ids:
-            return set()
-
-        with DBConnection().connection as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT DISTINCT station_id FROM temperature_reports "
-                    "WHERE station_id = ANY(%s) AND date BETWEEN %s AND %s "
-                    "AND (temp_min IS NOT NULL OR temp_max IS NOT NULL)",
-                    (list(station_ids), start_date, end_date),
-                )
-                rows = cursor.fetchall()
-
-        return {row["station_id"] for row in rows}
+        return pd.DataFrame(rows, columns=REPORT_COLUMNS)
 
     @staticmethod
     def _to_report(row: dict) -> TemperatureReport:

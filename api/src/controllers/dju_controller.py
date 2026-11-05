@@ -57,7 +57,19 @@ def to_csv(rows: list[tuple[str, DjuCalculation]]) -> Response:
     )
 
 
-def to_zone_response(calculations: list[DjuCalculation]) -> DjuZoneResponse:
+def period_warning(request, calculation: DjuCalculation | None) -> str | None:
+    """Message si la période calculée est plus courte que la période demandée, sinon None."""
+    if calculation is None:
+        return None
+    if (calculation.start_date, calculation.end_date) == (request.start_date, request.end_date):
+        return None
+    return (
+        f"Période raccourcie aux données disponibles : calcul du {calculation.start_date} "
+        f"au {calculation.end_date} au lieu du {request.start_date} au {request.end_date}."
+    )
+
+
+def to_zone_response(calculations: list[DjuCalculation], warning: str | None = None) -> DjuZoneResponse:
     """Regroupe les calculs par sous-zone."""
     zones: dict[tuple, DjuZoneResult] = {}
     for calc in calculations:
@@ -67,7 +79,7 @@ def to_zone_response(calculations: list[DjuCalculation]) -> DjuZoneResponse:
                 zone_type=calc.zone.zone_type, zone_id=calc.zone.id, name=calc.zone.name, results={}
             )
         zones[key].results[calc.type.mode] = to_items(calc)
-    return DjuZoneResponse(zones=list(zones.values()))
+    return DjuZoneResponse(zones=list(zones.values()), warning=warning)
 
 
 @router.get("/")
@@ -88,7 +100,10 @@ def calculate_point_dju(
         raise http_error(exc) from exc
     if output_format == "csv":
         return to_csv([("point", calc) for calc in calculations.values()])
-    return DjuResponse(results={mode: to_items(calc) for mode, calc in calculations.items()})
+    return DjuResponse(
+        results={mode: to_items(calc) for mode, calc in calculations.items()},
+        warning=period_warning(request, next(iter(calculations.values()), None)),
+    )
 
 
 @router.post("/zone", response_model=DjuZoneResponse)
@@ -104,4 +119,6 @@ def calculate_zone_dju(
         raise http_error(exc) from exc
     if output_format == "csv":
         return to_csv([(calc.zone.name, calc) for calc in calculations])
-    return to_zone_response(calculations)
+    return to_zone_response(
+        calculations, period_warning(request, calculations[0] if calculations else None)
+    )

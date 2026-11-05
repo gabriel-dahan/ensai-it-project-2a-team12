@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+import pandas as pd
 import pytest
 
 from business_object.dju import DjuCalculation, DjuType
@@ -15,6 +16,21 @@ COOLING = DjuType(id=None, name="cooling", base_temperature=22, mode="cooling")
 
 def report(day, t_min, t_max, observed=True):
     return TemperatureReport(station_id=None, date=day, temp_min=t_min, temp_max=t_max, observed=observed)
+
+
+def point_data(*days_and_means, not_observed=()):
+    """Températures d'un point : (jour, moyenne)... -> (moyennes, observé), indexés par date."""
+    days = [day for day, _ in days_and_means]
+    means = pd.Series([mean for _, mean in days_and_means], index=days, dtype=float)
+    observed = pd.Series([day not in not_observed for day in days], index=days)
+    return means, observed
+
+
+def zone_data(day, means_by_code, not_observed=()):
+    """Températures d'un jour pour plusieurs communes : une colonne par code INSEE."""
+    means = pd.DataFrame({code: [mean] for code, mean in means_by_code.items()}, index=[day], dtype=float)
+    observed = pd.DataFrame({code: [code not in not_observed] for code in means_by_code}, index=[day])
+    return means, observed
 
 
 def calculation(start, end, time_step="day", zone=None):
@@ -33,35 +49,40 @@ def municipality(code, population):
 # DjuType
 
 def test_heating_value():
-    assert HEATING.compute_daily_value(4, 10) == 11  # moyenne 7
+    assert HEATING.compute_daily_value(7) == 11
 
 
 def test_cooling_value():
-    assert COOLING.compute_daily_value(20, 30) == 3  # moyenne 25
+    assert COOLING.compute_daily_value(25) == 3
 
 
 def test_value_is_never_negative():
-    assert HEATING.compute_daily_value(20, 30) == 0
-    assert COOLING.compute_daily_value(0, 10) == 0
+    assert HEATING.compute_daily_value(25) == 0
+    assert COOLING.compute_daily_value(5) == 0
+
+
+def test_value_on_a_whole_column():
+    values = HEATING.compute_daily_value(pd.Series([7.0, 25.0, float("nan")]))
+    assert values.iloc[0] == 11 and values.iloc[1] == 0 and pd.isna(values.iloc[2])
 
 
 # DjuCalculation.run et aggregate
 
 def test_run_by_day():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 2))
-    results = calc.run([report(date(2024, 1, 2), 8, 8), report(date(2024, 1, 1), 10, 10)])
-    assert [r.value for r in results] == [8, 10]
+    results = calc.run(*point_data((date(2024, 1, 2), 10), (date(2024, 1, 1), 8)))
+    assert [r.value for r in results] == [10, 8]
     assert results[0].period_start == results[0].period_end == date(2024, 1, 1)
     assert calc.computed_at == date.today()
 
 
 def test_run_ignores_missing_values_and_days_outside_period():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 31), "month")
-    results = calc.run([
-        report(date(2024, 1, 1), 10, 10),
-        report(date(2024, 1, 2), None, 10),
-        report(date(2024, 2, 1), 0, 0),
-    ])
+    results = calc.run(*point_data(
+        (date(2024, 1, 1), 10),
+        (date(2024, 1, 2), float("nan")),
+        (date(2024, 2, 1), 0),
+    ))
     assert len(results) == 1
     assert results[0].value == 8
     assert results[0].days_with_data == 1
@@ -70,7 +91,7 @@ def test_run_ignores_missing_values_and_days_outside_period():
 def test_week_is_iso_week_clamped_to_period():
     # 3 janvier 2024 = mercredi ; la semaine suivante commence le lundi 8
     calc = calculation(date(2024, 1, 3), date(2024, 1, 10), "week")
-    results = calc.run([report(d, 18, 18) for d in days(date(2024, 1, 3), date(2024, 1, 10))])
+    results = calc.run(*point_data(*[(d, 18) for d in days(date(2024, 1, 3), date(2024, 1, 10))]))
     assert [(r.period_start, r.period_end) for r in results] == [
         (date(2024, 1, 3), date(2024, 1, 7)),
         (date(2024, 1, 8), date(2024, 1, 10)),
@@ -80,7 +101,7 @@ def test_week_is_iso_week_clamped_to_period():
 
 def test_month_uses_calendar_bounds_even_without_data_at_the_edges():
     calc = calculation(date(2024, 1, 15), date(2024, 3, 31), "month")
-    results = calc.run([report(date(2024, 2, 10), 8, 8), report(date(2024, 1, 20), 8, 8)])
+    results = calc.run(*point_data((date(2024, 2, 10), 8), (date(2024, 1, 20), 8)))
     assert [(r.period_start, r.period_end) for r in results] == [
         (date(2024, 1, 15), date(2024, 1, 31)),
         (date(2024, 2, 1), date(2024, 2, 29)),
@@ -89,7 +110,7 @@ def test_month_uses_calendar_bounds_even_without_data_at_the_edges():
 
 def test_year_aggregation():
     calc = calculation(date(2023, 12, 31), date(2024, 1, 1), "year")
-    results = calc.run([report(date(2023, 12, 31), 8, 8), report(date(2024, 1, 1), 18, 18)])
+    results = calc.run(*point_data((date(2023, 12, 31), 8), (date(2024, 1, 1), 18)))
     assert [(r.period_start, r.period_end, r.value) for r in results] == [
         (date(2023, 12, 31), date(2023, 12, 31), 10),
         (date(2024, 1, 1), date(2024, 1, 1), 0),
@@ -98,7 +119,7 @@ def test_year_aggregation():
 
 def test_aggregate_can_change_time_step():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 3))
-    calc.run([report(d, 8, 8) for d in days(date(2024, 1, 1), date(2024, 1, 3))])
+    calc.run(*point_data(*[(d, 8) for d in days(date(2024, 1, 1), date(2024, 1, 3))]))
     results = calc.aggregate("month")
     assert len(results) == 1 and results[0].value == 30
 
@@ -106,17 +127,14 @@ def test_aggregate_can_change_time_step():
 def test_unknown_time_step():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 3), "hour")
     with pytest.raises(ValueError):
-        calc.run([])
+        calc.run(*point_data())
 
 
 def test_observed_ratio():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 4), "month")
-    results = calc.run([
-        report(date(2024, 1, 1), 8, 8),
-        report(date(2024, 1, 2), 8, 8),
-        report(date(2024, 1, 3), 8, 8, observed=False),
-        report(date(2024, 1, 4), 8, 8),
-    ])
+    results = calc.run(*point_data(
+        *[(d, 8) for d in days(date(2024, 1, 1), date(2024, 1, 4))], not_observed=[date(2024, 1, 3)]
+    ))
     assert results[0].days_with_data == 4
     assert results[0].observed_ratio == 0.75
 
@@ -127,10 +145,8 @@ def test_run_for_zone_weighted_by_population():
     big, small = municipality("A", 300), municipality("B", 100)
     zone = Department(id=1, name="D", insee_code="01", municipalities=[big, small])
     calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
-    results = calc.run_for_zone({
-        "A": [report(date(2024, 1, 1), 10, 10)],               # 8 DJU
-        "B": [report(date(2024, 1, 1), 2, 2, observed=False)],  # 16 DJU
-    })
+    # A : 8 DJU, B : 16 DJU (valeur comblée)
+    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "B": 2}, not_observed=["B"]))
     assert results[0].value == pytest.approx(10)  # (300 * 8 + 100 * 16) / 400
     assert results[0].observed_ratio == 0
 
@@ -138,21 +154,29 @@ def test_run_for_zone_weighted_by_population():
 def test_run_for_zone_ignores_municipality_without_population():
     zone = Zoning(id=1, name="Z", municipalities=[municipality("A", 100), municipality("B", None)])
     calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
-    results = calc.run_for_zone({"A": [report(date(2024, 1, 1), 10, 10)], "B": [report(date(2024, 1, 1), 2, 2)]})
+    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "B": 2}))
     assert results[0].value == 8
 
 
 def test_run_for_zone_all_populations_null_gives_simple_mean():
     zone = Zoning(id=1, name="Z", municipalities=[municipality("A", None), municipality("B", 0)])
     calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
-    results = calc.run_for_zone({"A": [report(date(2024, 1, 1), 10, 10)], "B": [report(date(2024, 1, 1), 2, 2)]})
+    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "B": 2}))
     assert results[0].value == 12
 
 
 def test_run_for_zone_uses_only_municipalities_with_data_that_day():
     zone = Zoning(id=1, name="Z", municipalities=[municipality("A", 100), municipality("B", 100)])
     calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
-    results = calc.run_for_zone({"A": [report(date(2024, 1, 1), 10, 10)], "B": [report(date(2024, 1, 1), None, 2)]})
+    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "B": float("nan")}, not_observed=["B"]))
+    assert results[0].value == 8
+    assert results[0].observed_ratio == 1  # B n'a pas de valeur, elle ne compte pas
+
+
+def test_run_for_zone_uses_only_columns_of_its_municipalities():
+    zone = Zoning(id=1, name="Z", municipalities=[municipality("A", 100)])
+    calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
+    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "OTHER": -20}))
     assert results[0].value == 8
 
 
