@@ -8,12 +8,10 @@ from psycopg2.extras import RealDictCursor
 
 from utils.singleton import Singleton
 
-# Charge le .env situé à la racine du dépôt
+# Charge le .env..
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
-# Au-delà de cette inactivité, on vérifie que le serveur n'a pas coupé la connexion
 IDLE_BEFORE_CHECK = 30  # secondes
-
 
 class DBConnection(metaclass=Singleton):
     """Connexion unique à PostgreSQL, partagée par toutes les DAO."""
