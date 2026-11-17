@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as dju_controller
+    participant DS as DjuService
+    participant TS as TemperatureService
+    participant Dao as TemperatureReportDao
+    participant Calc as DjuCalculation
+    Client->>Ctrl: POST /dju/point
+    Ctrl->>DS: calculate_point_dju(request)
+    DS->>TS: find_candidate_stations(locations, n, start, end)
+    TS->>Dao: get_reports_dataframe(station_ids, start, end)
+    Dao-->>TS: relevés
+    TS-->>DS: stations et relevés
+    DS->>TS: estimate_daily_temperatures(locations, stations, reports)
+    TS-->>DS: températures moyennes et indicateur observé
+    loop chaque seuil fourni
+        DS->>Calc: run(daily_means, daily_observed)
+        Calc-->>DS: list[DjuResult]
+    end
+    DS-->>Ctrl: dict[mode, DjuCalculation]
+    Ctrl-->>Client: 200 DjuResponse (ou CSV)

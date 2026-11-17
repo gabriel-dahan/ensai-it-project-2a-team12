@@ -1,0 +1,34 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as dju_controller
+    participant DS as DjuService
+    participant ZS as ZoneService
+    participant Dao as DjuDao
+    participant TS as TemperatureService
+    participant Calc as DjuCalculation
+    Client->>Ctrl: POST /dju/zone
+    Ctrl->>DS: calculate_zone_dju(request, user)
+    DS->>ZS: get_zone(zone_type, zone_id, user)
+    ZS-->>DS: zone et ses communes
+    DS->>ZS: get_sub_zones(zone, aggregation_level)
+    ZS-->>DS: sous-zones
+    loop chaque sous-zone et chaque seuil
+        DS->>Dao: find_calculation(zone, type, période, paramètres)
+        alt calcul stocké
+            DS->>Dao: get_calculation_results(id)
+            Dao-->>DS: list[DjuResult]
+        else calcul absent
+            DS->>DS: mettre le calcul de côté
+        end
+    end
+    opt au moins un calcul absent
+        DS->>TS: get_municipality_temperatures(communes, ...)
+        TS-->>DS: tableaux jours × communes
+        loop chaque calcul absent
+            DS->>Calc: run_for_zone(means, observed)
+            Calc-->>DS: list[DjuResult]
+            DS->>Dao: save_calculation(calculation)
+        end
+    end
+    DS-->>Ctrl: list[DjuCalculation]
+    Ctrl-->>Client: 200 DjuZoneResponse (ou CSV)

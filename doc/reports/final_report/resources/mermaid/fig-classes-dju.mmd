@@ -1,0 +1,47 @@
+classDiagram
+    direction TB
+    class MeteoStation {
+        +str station_code
+        +float latitude
+        +float longitude
+        +float altitude
+        +distance_to(lat, lon) float
+    }
+    class TemperatureReport {
+        +date date
+        +float temp_min
+        +float temp_max
+        +bool observed
+        +daily_mean() float
+        +apply_altitude_correction(delta_alt) TemperatureReport
+    }
+    class DjuType {
+        +float base_temperature
+        +str mode
+        +compute_daily_value(t_mean)
+    }
+    class DjuCalculation {
+        +date start_date
+        +date end_date
+        +str time_step
+        +int number_of_stations
+        +bool use_altitude
+        +run(daily_means, daily_observed) list~DjuResult~
+        +run_for_zone(means, observed) list~DjuResult~
+        +aggregate(time_step) list~DjuResult~
+    }
+    class DjuResult {
+        +date period_start
+        +date period_end
+        +float value
+        +int days_with_data
+        +float observed_ratio
+    }
+    class GeographicZone {
+        <<abstract>>
+    }
+    TemperatureReport "*" --> "1" MeteoStation : mesuré par
+    DjuCalculation "*" --> "1" DjuType : utilise
+    DjuCalculation "1" *-- "*" DjuResult : produit
+    DjuCalculation "*" --> "0..1" GeographicZone : zone
+    DjuCalculation "*" --> "*" MeteoStation : candidate_stations

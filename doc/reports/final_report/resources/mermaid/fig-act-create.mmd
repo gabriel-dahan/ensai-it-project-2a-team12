@@ -1,0 +1,22 @@
+flowchart TD
+    debut((" ")) --> in["Jeton, puis codes INSEE ou contenu d'un fichier"]
+    in --> d1{"Jeton valide ?"}
+    d1 -->|"[non]"| e1("Erreur 401")
+    e1 --> f1(((" ")))
+    d1 -->|"[oui]"| d2{"Source ?"}
+    d2 -->|"[liste de codes]"| a1("create_zoning(...)")
+    d2 -->|"[fichier CSV ou JSON]"| a2("Extraire les codes<br/>import_zoning(...)")
+    a1 --> m1{" "}
+    a2 --> m1
+    m1 --> a3("Retrouver les communes par code INSEE")
+    a3 --> d3{"Tous les codes existent ?"}
+    d3 -->|"[non]"| e2("Erreur 400 avec les codes inconnus")
+    e2 --> f2(((" ")))
+    d3 -->|"[oui]"| a4("User.create_zoning(name, description)<br/>puis add_municipality(m)")
+    a4 --> a5("Enregistrer le zonage")
+    a5 --> out["ZoningResponse (201)"]
+    out --> fin(((" ")))
+    classDef initial fill:#808080,stroke:#808080
+    classDef final fill:none,stroke:#808080,stroke-width:2.5px
+    class debut initial
+    class fin,f1,f2 final

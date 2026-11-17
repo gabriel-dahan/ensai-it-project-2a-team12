@@ -1,0 +1,23 @@
+flowchart LR
+    admin["Administrateur"]
+    anon["Utilisateur anonyme"]
+    auth["Utilisateur authentifié"]
+    subgraph sys["API DJU"]
+        direction TB
+        f0(["Initialiser les données (F0)"])
+        f1(["Calculer un DJU ponctuel (F1)"])
+        f2(["Consulter les zonages officiels (F2)"])
+        f3(["Calculer un DJU sur un territoire officiel (F3)"])
+        f4a(["Créer un zonage personnalisé (F4)"])
+        f4b(["Gérer un zonage personnalisé (F4)"])
+        f3z(["Calculer un DJU sur son zonage (F3)"])
+    end
+    fo3(["Importer un zonage CSV / JSON (FO3)"])
+    admin --- f0
+    anon --- f1
+    anon --- f2
+    anon --- f3
+    auth --- f4a
+    auth --- f4b
+    auth --- f3z
+    fo3 -. "«extend»" .-> f4a

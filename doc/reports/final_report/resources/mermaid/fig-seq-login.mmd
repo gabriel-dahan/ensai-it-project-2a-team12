@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as user_controller
+    participant AS as AuthService
+    participant Dao as UserDao
+    participant U as User
+    Client->>Ctrl: POST /user/login
+    Ctrl->>AS: authenticate(username, password)
+    AS->>Dao: find_by_username(username)
+    Dao-->>AS: User
+    AS->>U: check_password(password)
+    U-->>AS: bool
+    alt mot de passe incorrect
+        AS-->>Ctrl: ServiceError 401
+        Ctrl-->>Client: 401
+    else mot de passe correct
+        AS-->>Ctrl: jeton JWT (24 h)
+        Ctrl-->>Client: 200 TokenResponse
+    end

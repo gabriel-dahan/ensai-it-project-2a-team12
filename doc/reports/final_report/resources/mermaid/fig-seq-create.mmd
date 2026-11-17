@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as zone_controller
+    participant ZS as ZoneService
+    participant GDao as GeoZoneDao
+    participant U as User
+    participant ZDao as ZoningDao
+    Client->>Ctrl: POST /user/zones (jeton)
+    Ctrl->>ZS: create_zoning(user, name, description, codes_insee)
+    ZS->>GDao: get_municipalities_by_insee(codes)
+    GDao-->>ZS: list[Municipality]
+    alt un code est inconnu
+        ZS-->>Ctrl: ServiceError 400
+        Ctrl-->>Client: 400
+    else toutes les communes existent
+        ZS->>U: create_zoning(name, description)
+        U-->>ZS: Zoning
+        ZS->>ZDao: create(zoning)
+        ZDao-->>ZS: Zoning
+        ZS-->>Ctrl: Zoning
+        Ctrl-->>Client: 201 ZoningResponse
+    end

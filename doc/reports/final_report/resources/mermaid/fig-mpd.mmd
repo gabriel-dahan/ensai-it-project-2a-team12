@@ -1,0 +1,90 @@
+erDiagram
+    users ||--o{ zonings : "possède"
+    regions ||--|{ departments : "contient"
+    departments ||--|{ municipalities : "contient"
+    zonings ||--|{ zoning_municipalities : "se compose de"
+    municipalities ||--o{ zoning_municipalities : "appartient à"
+    meteo_stations ||--o{ temperature_reports : "mesure"
+    dju_types ||--o{ dju_calculations : "est appliqué par"
+    dju_calculations ||--|{ dju_results : "produit"
+    users {
+        int id PK
+        varchar username UK
+        varchar password "haché (bcrypt)"
+    }
+    regions {
+        int id PK
+        varchar insee_code UK
+        varchar name
+    }
+    departments {
+        int id PK
+        varchar insee_code UK
+        varchar name
+        int region_id FK
+    }
+    municipalities {
+        int id PK
+        varchar insee_code UK
+        varchar name
+        float latitude
+        float longitude
+        float altitude "NULL si inconnue"
+        int population
+        int department_id FK
+    }
+    zonings {
+        int id PK
+        varchar name
+        text description
+        date created_at
+        int user_id FK
+    }
+    zoning_municipalities {
+        int zoning_id PK
+        int municipality_id PK
+    }
+    meteo_stations {
+        int id PK
+        varchar station_code UK "NUM_POSTE"
+        varchar name
+        float latitude
+        float longitude
+        float altitude
+    }
+    temperature_reports {
+        bigint id PK
+        int station_id FK
+        date date "unique avec station_id"
+        float temp_min "TN"
+        float temp_max "TX"
+        varchar source_tmin
+        varchar source_tmax
+    }
+    dju_types {
+        int id PK
+        varchar name
+        varchar mode "heating ou cooling"
+        float base_temperature "unique avec mode"
+    }
+    dju_calculations {
+        int id PK
+        int dju_type_id FK
+        varchar zone_type
+        int zone_id
+        date start_date
+        date end_date
+        varchar time_step
+        int number_of_stations
+        boolean use_altitude
+        date computed_at
+    }
+    dju_results {
+        int id PK
+        int calculation_id FK
+        date period_start
+        date period_end
+        float value
+        int days_with_data
+        float observed_ratio
+    }

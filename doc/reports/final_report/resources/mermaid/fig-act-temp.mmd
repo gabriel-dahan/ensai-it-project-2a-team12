@@ -1,0 +1,28 @@
+flowchart LR
+    subgraph s1["find_candidate_stations(...)"]
+        direction TB
+        debut((" ")) --> in["lieux, période, n"]
+        in --> a1("Trier les stations<br/>par distance (Haversine)")
+        a1 --> m0{" "}
+        m0 --> a2("Retenir les n premières<br/>stations non écartées")
+        a2 --> a3("Lire en une requête les<br/>relevés des nouvelles stations<br/>get_reports_dataframe(...)")
+        a3 --> d1{"Une station sans<br/>aucun relevé ?"}
+        d1 -->|"[oui] l'écarter"| m0
+        d1 -->|"[non]"| sortie1(["stations et relevés"])
+    end
+    subgraph s2["estimate_daily_temperatures(...)"]
+        direction TB
+        a4("Tableau jours × stations") --> d2{"Altitude du<br/>lieu fournie ?"}
+        d2 -->|"[oui]"| a5("Corriger de -0,65 °C<br/>par 100 m d'écart")
+        d2 -->|"[non]"| m1{" "}
+        a5 --> m1
+        m1 --> a6("Poids 1 / d²,<br/>une fois pour la période")
+        a6 --> a7("Chaque jour, moyenne pondérée<br/>des stations qui ont une valeur")
+        a7 --> out["Tableaux jours × lieux :<br/>température moyenne<br/>et indicateur observé"]
+        out --> fin(((" ")))
+    end
+    s1 --> s2
+    classDef initial fill:#808080,stroke:#808080
+    classDef final fill:none,stroke:#808080,stroke-width:2.5px
+    class debut initial
+    class fin final

@@ -1,0 +1,23 @@
+flowchart TD
+    debut((" ")) --> in["Jeton, zoning_id, modifications éventuelles"]
+    in --> d1{"Jeton valide ?"}
+    d1 -->|"[non]"| e1("Erreur 401")
+    e1 --> f1(((" ")))
+    d1 -->|"[oui]"| d2{"Zonage trouvé ?"}
+    d2 -->|"[non]"| e2("Erreur 404")
+    e2 --> f2(((" ")))
+    d2 -->|"[oui]"| d3{"Propriétaire ?<br/>is_owned_by(user)"}
+    d3 -->|"[non]"| e3("Erreur 403")
+    e3 --> f3(((" ")))
+    d3 -->|"[oui]"| d4{"Action ?"}
+    d4 -->|"[modifier]"| a1("update_zoning(...)")
+    d4 -->|"[supprimer]"| a2("delete_zoning(...)")
+    a1 --> m1{" "}
+    a2 --> m1
+    m1 --> a3("Supprimer les calculs stockés du zonage<br/>delete_calculations_for_zone(...)")
+    a3 --> out["ZoningResponse (200) ou réponse vide (204)"]
+    out --> fin(((" ")))
+    classDef initial fill:#808080,stroke:#808080
+    classDef final fill:none,stroke:#808080,stroke-width:2.5px
+    class debut initial
+    class fin,f1,f2,f3 final

@@ -1,0 +1,30 @@
+flowchart LR
+    subgraph s1["meteo.py"]
+        direction TB
+        debut((" ")) --> a1("Télécharger les relevés<br/>de chaque département<br/>telecharger_departement(dept)")
+        a1 --> a2("Garder 8 colonnes et<br/>les dates depuis 1990<br/>filtrer_donnees_meteo(...)")
+        a2 --> o1["Parquet brut"]
+    end
+    subgraph s2["qualite_meteo.py"]
+        direction TB
+        a3("Vider les valeurs aberrantes,<br/>compléter le calendrier") --> d1{"Longueur<br/>du trou ?"}
+        d1 -->|"[1 à 30 j]"| a4("Combler et<br/>noter la source")
+        d1 -->|"[plus de 30 j]"| a5("Laisser vide")
+        a4 --> m1{" "}
+        a5 --> m1
+        m1 --> a6("Retirer les valeurs<br/>comblées incohérentes")
+        a6 --> o2["Parquet nettoyé"]
+    end
+    subgraph s3["communes.py, init_db.py"]
+        direction TB
+        a7("Communes et altitude<br/>des mairies<br/>fetch_communes()") --> o3["Parquet des communes"]
+        o3 --> a8("Créer les tables<br/>creer_tables(conn)")
+        a8 --> a9("Insérer le territoire,<br/>les stations, puis les<br/>relevés par COPY")
+        a9 --> fin(((" ")))
+    end
+    s1 --> s2
+    s2 --> s3
+    classDef initial fill:#808080,stroke:#808080
+    classDef final fill:none,stroke:#808080,stroke-width:2.5px
+    class debut initial
+    class fin final

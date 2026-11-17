@@ -1,0 +1,20 @@
+flowchart TD
+    debut((" ")) --> in["DjuPointRequest"]
+    in --> d1{"Format valide ?"}
+    d1 -->|"[non]"| e1("Erreur 422")
+    e1 --> f1(((" ")))
+    d1 -->|"[oui]"| d2{"Au moins un seuil, dates dans l'ordre,<br/>période avec des données ?"}
+    d2 -->|"[non]"| e2("Erreur 400")
+    e2 --> f2(((" ")))
+    d2 -->|"[oui]"| a1("Estimer les températures du point une fois<br/>estimate_daily_temperatures(...)")
+    a1 --> m1{" "}
+    m1 --> a2("DJU de chaque jour<br/>DjuType.compute_daily_value(t_mean)")
+    a2 --> a3("Cumuler par période<br/>DjuCalculation.aggregate(time_step)")
+    a3 --> d3{"Autre seuil ?"}
+    d3 -->|"[oui]"| m1
+    d3 -->|"[non]"| out["DjuResponse (ou CSV)"]
+    out --> fin(((" ")))
+    classDef initial fill:#808080,stroke:#808080
+    classDef final fill:none,stroke:#808080,stroke-width:2.5px
+    class debut initial
+    class fin,f1,f2 final

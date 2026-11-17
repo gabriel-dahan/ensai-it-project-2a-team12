@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as zone_controller
+    participant ZS as ZoneService
+    participant ZDao as ZoningDao
+    participant Z as Zoning
+    participant DDao as DjuDao
+    Client->>Ctrl: PATCH /user/zones/{id} (jeton)
+    Ctrl->>ZS: update_zoning(user, id, description, ajouts, retraits)
+    ZS->>ZDao: find_by_id(id)
+    ZDao-->>ZS: Zoning
+    ZS->>Z: is_owned_by(user)
+    alt autre utilisateur
+        ZS-->>Ctrl: ServiceError 403
+        Ctrl-->>Client: 403
+    else propriétaire
+        ZS->>Z: add_municipality(m) / remove_municipality(m)
+        ZS->>ZDao: update(zoning)
+        ZS->>DDao: delete_calculations_for_zone("zoning", id)
+        ZS-->>Ctrl: Zoning
+        Ctrl-->>Client: 200 ZoningResponse
+    end

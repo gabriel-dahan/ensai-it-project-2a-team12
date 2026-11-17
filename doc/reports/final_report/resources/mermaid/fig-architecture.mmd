@@ -1,0 +1,20 @@
+flowchart TB
+    client(["Client HTTP"]) --> pres
+    subgraph api["API DJU (api/src)"]
+        pres["Présentation : contrôleurs FastAPI et schémas Pydantic<br/>/dju, /zones, /user, /user/zones · JSON ou CSV"]
+        serv["Services : DjuService, TemperatureService,<br/>ZoneService, AuthService"]
+        bo["Objets métier : DjuCalculation, DjuType, DjuResult,<br/>Region, Department, Municipality, Zoning,<br/>MeteoStation, TemperatureReport, User"]
+        dao["DAO : DjuDao, GeoZoneDao, ZoningDao, UserDao,<br/>MeteoStationDao, TemperatureReportDao · DBConnection"]
+        pres --> serv
+        serv --> bo
+        serv --> dao
+        dao --> bo
+    end
+    dao --> db[("PostgreSQL")]
+    subgraph data["Préparation des données (data/)"]
+        scripts["meteo.py → qualite_meteo.py<br/>communes.py → init_db.py"]
+        pq[("Fichiers Parquet")]
+        scripts <--> pq
+    end
+    ext(["Météo-France, geo.api.gouv.fr, IGN"]) --> scripts
+    scripts --> db

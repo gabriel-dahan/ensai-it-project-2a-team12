@@ -1,0 +1,45 @@
+classDiagram
+    direction TB
+    class GeographicZone {
+        <<abstract>>
+        +int id
+        +str name
+        +get_municipalities() list~Municipality~
+    }
+    class Region {
+        +str insee_code
+        +add_department(department)
+    }
+    class Department {
+        +str insee_code
+        +add_municipality(municipality)
+    }
+    class Municipality {
+        +str insee_code
+        +float latitude
+        +float longitude
+        +float altitude
+        +int population
+        +distance_to(lat, lon) float
+    }
+    class Zoning {
+        +str description
+        +int owner_id
+        +add_municipality(m)
+        +remove_municipality(m)
+        +is_owned_by(user) bool
+    }
+    class User {
+        +str username
+        -bytes password
+        +check_password(password) bool
+        +create_zoning(name, description) Zoning
+    }
+    GeographicZone <|-- Region
+    GeographicZone <|-- Department
+    GeographicZone <|-- Municipality
+    GeographicZone <|-- Zoning
+    Region "1" o-- "1..*" Department : contient
+    Department "1" o-- "1..*" Municipality : contient
+    Zoning "*" o-- "1..*" Municipality : contient
+    User "1" -- "*" Zoning : possède

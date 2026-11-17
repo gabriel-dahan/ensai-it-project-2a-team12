@@ -1,0 +1,11 @@
+sequenceDiagram
+    actor Client
+    participant Ctrl as zone_controller
+    participant ZS as ZoneService
+    participant Dao as GeoZoneDao
+    Client->>Ctrl: GET /zones?type=region
+    Ctrl->>ZS: list_public_zones(zone_type)
+    ZS->>Dao: get_regions()
+    Dao-->>ZS: list[Region]
+    ZS-->>Ctrl: list[GeographicZone]
+    Ctrl-->>Client: 200 list[ZoneResponse]
