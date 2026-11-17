@@ -1,0 +1,41 @@
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{microtype}
+\usepackage{needspace}
+\usepackage{xcolor}
+\usepackage{etoolbox}
+\usepackage{fontspec}
+\IfFontExistsTF{Noto Serif}{\setmainfont{Noto Serif}}{\setmainfont{TeX Gyre Termes}}
+\IfFontExistsTF{Carlito}{\setsansfont{Carlito}}{\setsansfont{TeX Gyre Heros}}
+\setmonofont{DejaVu Sans Mono}[Scale=0.82]
+\definecolor{reportblue}{HTML}{244B76}
+\definecolor{reportgray}{HTML}{66778A}
+\titleformat{\section}[hang]{\sffamily\large\bfseries\color{reportblue}}{}{0em}{}
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+\titleformat{\subsection}[hang]{\sffamily\normalsize\bfseries\color{reportblue}}{}{0em}{}
+\titlespacing*{\subsection}{0pt}{7pt}{4pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{3em}
+\linespread{1.07}
+\setlength{\LTpre}{3pt}
+\setlength{\LTpost}{4pt}
+\captionsetup{font=footnotesize,labelfont=bf,skip=3pt}
+\setlength{\textfloatsep}{6pt}
+\setlength{\intextsep}{6pt}
+\floatplacement{figure}{H}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\color{reportgray} ENSAI \quad PROJET INFORMATIQUE 2A}
+\fancyhead[R]{\footnotesize\color{reportgray} ÉQUIPE 12 \quad API DJU}
+\fancyfoot[C]{\footnotesize\color{reportgray} Rapport final \quad 2026 \qquad \thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\pagestyle{fancy}}
+\AtBeginDocument{\raggedbottom}
+\addto\captionsfrench{\renewcommand{\contentsname}{Sommaire}}

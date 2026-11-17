@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="fr" xml:lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Rapport final : API de calcul des degrés-jours unifiés</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="/usr/share/javascript/mathjax/MathJax.js"
+  type="text/javascript"></script>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Rapport final DJU �� ENSAI ��quipe 12</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#synthèse-du-projet" id="toc-synthèse-du-projet">1.
+Synthèse du projet</a></li>
+<li><a href="#enjeux-métiers-et-définition-des-dju"
+id="toc-enjeux-métiers-et-définition-des-dju">2. Enjeux métiers et
+définition des DJU</a></li>
+<li><a href="#cahier-des-charges-acteurs-et-besoins"
+id="toc-cahier-des-charges-acteurs-et-besoins">3. Cahier des charges :
+acteurs et besoins</a></li>
+<li><a href="#fonctionnalités-et-priorisation"
+id="toc-fonctionnalités-et-priorisation">4. Fonctionnalités et
+priorisation</a></li>
+<li><a href="#organisation-du-travail-en-équipe"
+id="toc-organisation-du-travail-en-équipe">5. Organisation du travail en
+équipe</a></li>
+<li><a href="#architecture-logicielle-en-couches"
+id="toc-architecture-logicielle-en-couches">6. Architecture logicielle
+en couches</a></li>
+<li><a href="#constitution-du-jeu-de-données"
+id="toc-constitution-du-jeu-de-données">7. Constitution du jeu de
+données</a></li>
+<li><a href="#fiabilisation-des-relevés-météorologiques"
+id="toc-fiabilisation-des-relevés-météorologiques">8. Fiabilisation des
+relevés météorologiques</a></li>
+<li><a href="#référentiel-géographique-et-modèle-sql"
+id="toc-référentiel-géographique-et-modèle-sql">9. Référentiel
+géographique et modèle SQL</a></li>
+<li><a href="#estimation-spatiale-des-températures"
+id="toc-estimation-spatiale-des-températures">10. Estimation spatiale
+des températures</a></li>
+<li><a href="#choix-et-robustesse-de-linterpolation"
+id="toc-choix-et-robustesse-de-linterpolation">11. Choix et robustesse
+de l’interpolation</a></li>
+<li><a href="#calcul-et-agrégation-des-dju"
+id="toc-calcul-et-agrégation-des-dju">12. Calcul et agrégation des
+DJU</a></li>
+<li><a href="#f1-dju-ponctuel-par-api"
+id="toc-f1-dju-ponctuel-par-api">13. F1 : DJU ponctuel par API</a></li>
+<li><a href="#démonstration-documentée-du-calcul-ponctuel"
+id="toc-démonstration-documentée-du-calcul-ponctuel">14. Démonstration
+documentée du calcul ponctuel</a></li>
+<li><a href="#f2-consultation-des-zones-officielles"
+id="toc-f2-consultation-des-zones-officielles">15. F2 : Consultation des
+zones officielles</a></li>
+<li><a href="#f3-dju-sur-un-territoire"
+id="toc-f3-dju-sur-un-territoire">16. F3 : DJU sur un
+territoire</a></li>
+<li><a href="#démonstration-territoriale-et-preuve-de-cohérence"
+id="toc-démonstration-territoriale-et-preuve-de-cohérence">17.
+Démonstration territoriale et preuve de cohérence</a></li>
+<li><a href="#f4-comptes-et-zonages-personnalisés"
+id="toc-f4-comptes-et-zonages-personnalisés">18. F4 : Comptes et zonages
+personnalisés</a></li>
+<li><a href="#fo2-et-fo3-sorties-et-imports"
+id="toc-fo2-et-fo3-sorties-et-imports">19. FO2 et FO3 : Sorties et
+imports</a></li>
+<li><a href="#contrats-http-et-traitement-des-erreurs"
+id="toc-contrats-http-et-traitement-des-erreurs">20. Contrats HTTP et
+traitement des erreurs</a></li>
+<li><a href="#persistance-cache-et-performance"
+id="toc-persistance-cache-et-performance">21. Persistance, cache et
+performance</a></li>
+<li><a href="#de-la-conception-à-limplémentation-écarts-expliqués"
+id="toc-de-la-conception-à-limplémentation-écarts-expliqués">22. De la
+conception à l’implémentation : écarts expliqués</a></li>
+<li><a href="#stratégie-de-tests-et-couverture-fonctionnelle"
+id="toc-stratégie-de-tests-et-couverture-fonctionnelle">23. Stratégie de
+tests et couverture fonctionnelle</a></li>
+<li><a href="#validation-numérique-et-exemples-reproductibles"
+id="toc-validation-numérique-et-exemples-reproductibles">24. Validation
+numérique et exemples reproductibles</a></li>
+<li><a href="#assurance-qualité-risques-preuves-et-priorités"
+id="toc-assurance-qualité-risques-preuves-et-priorités">25. Assurance
+qualité : risques, preuves et priorités</a></li>
+<li><a href="#installation-et-exploitation-de-lapi"
+id="toc-installation-et-exploitation-de-lapi">26. Installation et
+exploitation de l’API</a></li>
+<li><a href="#limites-perspectives-et-conclusion"
+id="toc-limites-perspectives-et-conclusion">27. Limites, perspectives et
+conclusion</a></li>
+<li><a href="#annexe-a-sources-conventions-et-vérifications"
+id="toc-annexe-a-sources-conventions-et-vérifications">Annexe A :
+Sources, conventions et vérifications</a></li>
+<li><a href="#annexe-b.1-note-individuelle-aziz-yousfi"
+id="toc-annexe-b.1-note-individuelle-aziz-yousfi">Annexe B.1 : Note
+individuelle : Aziz Yousfi</a></li>
+<li><a href="#annexe-b.2-note-individuelle-eudes-sterlin"
+id="toc-annexe-b.2-note-individuelle-eudes-sterlin">Annexe B.2 : Note
+individuelle : Eudes Sterlin</a></li>
+<li><a href="#annexe-b.3-note-individuelle-gabriel-dahan"
+id="toc-annexe-b.3-note-individuelle-gabriel-dahan">Annexe B.3 : Note
+individuelle : Gabriel Dahan</a></li>
+<li><a href="#annexe-b.4-note-individuelle-gwenaël-lassalle"
+id="toc-annexe-b.4-note-individuelle-gwenaël-lassalle">Annexe B.4 : Note
+individuelle : Gwenaël Lassalle</a></li>
+<li><a href="#annexe-b.5-note-individuelle-marceau-feral"
+id="toc-annexe-b.5-note-individuelle-marceau-feral">Annexe B.5 : Note
+individuelle : Marceau Feral</a></li>
+</ul>
+</nav>
+<section class="cover" aria-label="Page de présentation">
+<div class="cover-address">
+Campus de Ker Lann rue Blaise Pascal<br>BP37203 35172 BRUZ CEDEX<br>Tél
+: +33 (0) 2 99 05 32 32<br>communication@ensai.fr<br>www.ensai.fr
+</div>
+<img class="cover-logo" src="../interim_report/resources/ensai_logo.png" alt="Logo ENSAI" onerror="this.onerror=null;this.src='resources/ensai_logo.png'">
+<div class="cover-logo-fallback" style="display:none">
+ENSAI
+</div>
+<div class="cover-report">
+Rapport Final
+</div>
+<div class="cover-rule">
+
+</div>
+<div class="cover-subject">
+<em>Sujet :</em><br><strong>API de calcul de DJU</strong>
+</div>
+<div class="cover-rule">
+
+</div>
+<div class="cover-people">
+<div>
+<em>Groupe 12 :</em><br><strong>Aziz Yousfi<br>Eudes Sterlin<br>Gabriel
+Dahan<br>Gwenaël Lassalle<br>Marceau Feral</strong>
+</div>
+<div class="cover-tutor">
+<em>Tuteur :</em><br><strong>Thierry Mathé</strong>
+</div>
+</div>
+<div class="cover-school">
+ENSAI<br>2026–2027
+</div>
+</section>
+<h1 id="synthèse-du-projet">1. Synthèse du projet</h1>
+<p>Les degrés-jours unifiés mesurent, pour un lieu et une période,
+l’écart entre la température extérieure et un seuil choisi. Ils
+constituent un indicateur de la demande théorique de chauffage ou de
+climatisation. Notre projet transforme ce calcul, initialement simple
+pour une station, en un service automatisé accessible par API REST pour
+des coordonnées géographiques ou des territoires entiers.</p>
+<p>L’application repose sur Python, FastAPI et PostgreSQL. Les séries
+Météo-France sont préparées hors ligne, nettoyées puis chargées en base.
+Les températures locales sont estimées grâce aux stations voisines, à la
+distance de Haversine et à une pondération inverse du carré de cette
+distance. Les calculs sur des communes peuvent ensuite être agrégés à
+l’échelle de départements et de régions.</p>
+<h2 id="ce-que-léquipe-a-effectivement-réalisé">Ce que l’équipe a
+effectivement réalisé</h2>
+<ul>
+<li><p>Un pipeline de données depuis les relevés météo et le référentiel
+des communes jusqu’au stockage SQL.</p></li>
+<li><p>Deux parcours de calcul : un point GPS et un territoire, avec
+regroupement temporel quotidien, hebdomadaire, mensuel ou
+annuel.</p></li>
+<li><p>Des routes de consultation des zones, des zonages personnels, de
+l’authentification et de l’import CSV/JSON.</p></li>
+<li><p>Des tests unitaires, tests de services et tests HTTP structurés,
+ainsi qu’une documentation de lancement.</p></li>
+</ul>
+<p>L’apport du projet dépasse la formule du DJU : il réside dans la
+fiabilité des données amont, la séparation des responsabilités, le
+contrôle des droits et la capacité à éviter des traitements
+redondants.</p>
+<h2 id="positionnement">Positionnement</h2>
+<p>Le projet n’est ni une plateforme de prévision météorologique ni,
+dans la version étudiée, un outil complet de correction des
+consommations énergétiques. Il fournit d’abord les indicateurs DJU qui
+pourraient alimenter une telle analyse dans un second temps.</p>
+<p>Le parcours complet d’une requête explicite la difficulté technique :
+l’utilisateur exprime une question métier par des coordonnées ou un
+identifiant de territoire ; le contrôleur vérifie sa forme ; un service
+recherche la période effectivement couverte ; le moteur reconstitue des
+températures cohérentes ; les objets métier calculent et regroupent les
+indicateurs ; la réponse transporte également la qualité des
+observations. Chaque étape est nécessaire pour que la valeur finale soit
+interprétable, et non seulement calculable.</p>
+<p>Le dossier d’analyse intermédiaire servait de modèle de conception.
+Le rapport final prend une autre posture : il confronte systématiquement
+les fonctionnalités prévues aux chemins de code effectivement présents.
+Cette évolution est essentielle dans un projet collectif, où une
+décision pertinente au début peut être révisée lors de l’intégration.
+L’intérêt pédagogique réside autant dans la justification de ces
+révisions que dans la restitution de l’architecture retenue.</p>
+<h1 id="enjeux-métiers-et-définition-des-dju">2. Enjeux métiers et
+définition des DJU</h1>
+<p>Les DJU quantifient l’écart thermique d’une journée par rapport à un
+seuil conventionnel. Les DJU de chauffage augmentent lorsque la
+température moyenne passe sous le seuil de chauffage ; les DJU de
+climatisation augmentent lorsqu’elle dépasse le seuil de climatisation.
+Ils décrivent une sollicitation climatique potentielle et ne mesurent ni
+directement des kWh, ni une facture énergétique.</p>
+<p>La température moyenne conventionnelle d’une journée est calculée par
+:</p>
+<p><span class="math display">\[
+T_m = \frac{T_{\min} + T_{\max}}{2}.
+\]</span></p>
+<p>Pour un seuil de chauffage <span class="math inline">\(S_c\)</span>
+et un seuil de climatisation <span class="math inline">\(S_f\)</span>,
+les DJU sont définis par :</p>
+<p><span class="math display">\[
+\mathrm{DJU}_{\mathrm{chauffage}} = \max(0, S_c - T_m), \qquad
+\mathrm{DJU}_{\mathrm{climatisation}} = \max(0, T_m - S_f).
+\]</span></p>
+<p>Une journée dont la température moyenne est égale au seuil fournit
+zéro DJU.</p>
+<figure>
+<img src="resources/figures/figure_01.png" style="width:93.0%"
+alt="Réponse des deux indicateurs à la température moyenne (seuils illustratifs)." />
+<figcaption aria-hidden="true">Réponse des deux indicateurs à la
+température moyenne (seuils illustratifs).</figcaption>
+</figure>
+<p>Le seuil est la température de référence au-delà (chauffage) ou en
+deçà (climatisation) de laquelle la demande conventionnelle
+correspondante est nulle. Il n’est pas estimé à partir des stations : il
+est choisi par le demandeur et transmis dans DjuPointRequest ou
+DjuZoneRequest. Le sujet rappelle que le SDES emploie un seuil de
+chauffage de 15 °C depuis 2023, contre 17 °C auparavant ; 18 °C reste un
+exemple illustratif, non une valeur imposée par notre API.</p>
+<p>Un DJU est donc un indicateur conventionnel, non une mesure directe
+des besoins énergétiques réels d’un bâtiment. Deux logements situés au
+même endroit peuvent avoir les mêmes DJU et pourtant consommer très
+différemment en raison de leur isolation, de leur système de chauffage
+et de leurs usages. La méthode fournit une variable explicative
+climatique, qu’il faudrait articuler avec les données de consommation
+pour calculer une correction des variations climatiques au sens
+économique.</p>
+<p>Pour un ensemble de jours, le cumul ne consiste pas à appliquer une
+seule fois la formule à la température moyenne de toute la période. Il
+faut d’abord évaluer l’écart au seuil chaque jour, puis sommer les
+écarts positifs. Cette distinction est importante : les journées chaudes
+et froides ne doivent pas se compenser artificiellement. Les deux modes,
+chauffage et climatisation, utilisent des seuils distincts et sont
+calculés indépendamment lorsque les deux sont demandés.</p>
+<h1 id="cahier-des-charges-acteurs-et-besoins">3. Cahier des charges :
+acteurs et besoins</h1>
+<p>Le cahier des charges fixe cinq fonctionnalités de base : F0
+(préparation de la base), F1 (DJU ponctuel), F2 (consultation des zones
+officielles), F3 (DJU d’un territoire) et F4 (zonages personnels). Une
+requête de calcul délimite explicitement les dates de début et de fin,
+choisit au moins un seuil thermique, un pas de temps et une
+localisation. Les données chargées depuis 1990 représentent la fenêtre
+de référence potentielle ; l’intervalle demandé est une autre période,
+pouvant être plus court ou partiellement hors couverture.</p>
+<h2 id="trois-profils-deux-niveaux-daccès">Trois profils, deux niveaux
+d’accès</h2>
+<ul>
+<li><p>Utilisateur public : calcul ponctuel, calcul sur territoire
+officiel et consultation des zones disponibles.</p></li>
+<li><p>Utilisateur authentifié : mêmes droits, plus création, import,
+modification et suppression de ses propres ensembles de
+communes.</p></li>
+<li><p>Responsable de l’alimentation (appelé « administrateur » dans les
+cas d’utilisation) : prépare les fichiers et peuple PostgreSQL via les
+scripts <code>data/*.py</code>, avant les appels aux routes métier ; ce
+rôle n’est pas un compte « administrateur » exposé par l’API.</p></li>
+</ul>
+<h2 id="contraintes-retenues">Contraintes retenues</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Dimension</th>
+<th style="text-align: left;">Exigence</th>
+<th style="text-align: left;">Solution retenue</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Précision spatiale</td>
+<td style="text-align: left;">Point arbitraire</td>
+<td style="text-align: left;">Interpolation à partir des stations
+proches</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Période</td>
+<td style="text-align: left;">Jours à années</td>
+<td style="text-align: left;">Agrégation et bornes calendaires</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Fiabilité</td>
+<td style="text-align: left;">Relevés incomplets</td>
+<td style="text-align: left;">Comblement et suivi de provenance</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Volume</td>
+<td style="text-align: left;">Millions d’observations</td>
+<td style="text-align: left;">Parquet hors ligne et PostgreSQL</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Sécurité</td>
+<td style="text-align: left;">Zonages privés</td>
+<td style="text-align: left;">JWT et vérification de propriété</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Réutilisation</td>
+<td style="text-align: left;">Calculs territoriaux coûteux</td>
+<td style="text-align: left;">Cache de résultats en base</td>
+</tr>
+</tbody>
+</table>
+<p>Le cœur du projet est le passage d’une spécification statistique à
+une application cohérente, capable d’expliquer les données utilisées et
+de renvoyer des erreurs prévisibles.</p>
+<p>La distinction entre période de données et période demandée est
+déterminante. La première est contrainte par la disponibilité des
+relevés chargés ; la seconde relève du choix du client. L’implémentation
+conserve leur intersection et la signale dans un champ warning si elle
+est plus courte que prévu. Cette politique rend la requête exploitable
+tout en évitant de promettre des valeurs sur des jours absents de la
+base. Si l’intersection est vide, le service refuse le calcul.</p>
+<p>Le nombre de stations et la prise en compte de l’altitude jouent un
+double rôle : ce sont des paramètres scientifiques qui modifient
+l’estimation, et des paramètres informatiques qui déterminent le coût du
+traitement et, pour un résultat territorial, son identité dans le cache.
+Ils ne doivent donc pas être laissés implicites dans la documentation de
+l’API. Le même couple lieu–dates peut produire plusieurs réponses
+justifiées selon les paramètres retenus.</p>
+<h1 id="fonctionnalités-et-priorisation">4. Fonctionnalités et
+priorisation</h1>
+<p>Nous présentons ci-dessous les exigences en termes d’entrées, de
+résultats et de dépendances. F0 fournit les données à toutes les autres
+fonctions ; F1 calcule en un point, F2 découvre les territoires, F3
+agrège les communes et F4 organise les zones privées. La priorité
+accordée aux options était FO1 (cache des résultats zonaux), puis FO3
+(import de zonages) et enfin FO2 (formats JSON/CSV). Les trois options
+disposent aujourd’hui de code, dans les limites précisées au chapitre
+19.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Code</th>
+<th style="text-align: left;">Fonction</th>
+<th style="text-align: left;">Statut observé dans le code</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">F0</td>
+<td style="text-align: left;">Préparation météo, communes et SQL</td>
+<td style="text-align: left;">Scripts dédiés et testés</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">F1</td>
+<td style="text-align: left;">DJU pour un point GPS</td>
+<td style="text-align: left;">Service et route implémentés</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">F2</td>
+<td style="text-align: left;">Liste et détail des zones officielles</td>
+<td style="text-align: left;">Routes implémentées</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">F3</td>
+<td style="text-align: left;">DJU pour région, département ou
+zonage</td>
+<td style="text-align: left;">Service avec cache territorial</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">F4</td>
+<td style="text-align: left;">Zonages personnalisés</td>
+<td style="text-align: left;">CRUD protégé par authentification</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FO1</td>
+<td style="text-align: left;">Persistance et cache</td>
+<td style="text-align: left;">Résultats des zones, point non
+persisté</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FO2</td>
+<td style="text-align: left;">Format des sorties</td>
+<td style="text-align: left;">JSON et CSV</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FO3</td>
+<td style="text-align: left;">Import de zonage</td>
+<td style="text-align: left;">CSV et JSON transmis dans le corps
+JSON</td>
+</tr>
+</tbody>
+</table>
+<h2 id="pourquoi-cet-ordre">Pourquoi cet ordre ?</h2>
+<p>F0 conditionne le calcul des températures ; F1 valide le moteur
+élémentaire avant F3, qui ajoute les contraintes territoriales et les
+pondérations. Les fonctionnalités F2 et F4 reposent sur la disponibilité
+du référentiel communal. Les formats de sortie et l’import enrichissent
+enfin des traitements déjà testables.</p>
+<p>La conception initiale prévoyait deux niveaux de cache.
+L’implémentation l’a restreint : DjuService.calculate_point_dju crée des
+résultats sans stockage, tandis que calculate_zone_dju relit ou
+enregistre les calculs par sous-zone. La classe
+MunicipalityTemperatureDao subsiste, mais
+TemperatureService.get_municipality_temperatures ne l’utilise pas : on
+ne peut pas annoncer un cache communal opérationnel.</p>
+<p>Le classement des exigences distingue les fonctionnalités visibles
+d’une requête HTTP des contraintes transversales. L’import CSV/JSON et
+la sortie CSV relèvent de l’ergonomie d’usage ; l’intégrité SQL, la
+vérification du propriétaire et le suivi des valeurs manquantes relèvent
+de la correction du service. Ces derniers points ne sont pas secondaires
+: une API qui répond vite avec des données non fiables ne remplit pas sa
+mission scientifique.</p>
+<p>La matrice des fonctionnalités est donc lue avec prudence : le dépôt
+prouve la présence des routes et des règles de calcul ; les tests les
+documentent ; l’intégration sur données complètes doit encore être
+reconfirmée sur le commit de remise. Cette distinction entre
+fonctionnalité développée et validation mesurée sera reprise dans le
+bilan.</p>
+<h1 id="organisation-du-travail-en-équipe">5. Organisation du travail en
+équipe</h1>
+<p>L’équipe de cinq élèves a utilisé un dépôt GitHub commun, des
+fichiers de suivi hebdomadaire dans doc/tracking et une documentation
+progressive en Markdown/Quarto. Le rapport intermédiaire a servi de base
+conceptuelle ; l’implémentation a ensuite conduit à revoir certains
+diagrammes et à distinguer les fonctionnalités souhaitées des
+fonctionnalités réellement codées.</p>
+<figure>
+<img src="resources/figures/figure_02.png" style="width:93.0%"
+alt="Gantt rétrospectif des contributions, d’après les comptes rendus hebdomadaires. Les cases représentent des activités mentionnées, non des durées mesurées." />
+<figcaption aria-hidden="true">Gantt rétrospectif des contributions,
+d’après les comptes rendus hebdomadaires. Les cases représentent des
+activités mentionnées, non des durées mesurées.</figcaption>
+</figure>
+<h2 id="répartition-documentée-des-réalisations">Répartition documentée
+des réalisations</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Membre</th>
+<th style="text-align: left;">Contributions relevées dans le suivi du 5
+novembre</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Mohamed Aziz Yousfi</td>
+<td style="text-align: left;">Refonte des calculs DJU et tests d’objets
+métier</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Eudes Sterlin</td>
+<td style="text-align: left;">Schéma SQL, mise à jour des diagrammes et
+audit de l’état du code</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Gabriel Dahan</td>
+<td style="text-align: left;">Services, routes, authentification,
+zonages, cache zonal et DAO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Gwenaël Lassalle</td>
+<td style="text-align: left;">Mise en page du rapport et chargement de
+la base distante</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Marceau Feral</td>
+<td style="text-align: left;">Chaîne de données, tests et vectorisation
+des calculs sur zones</td>
+</tr>
+</tbody>
+</table>
+<p>Ces attributions sont celles que l’équipe a consignées, et non une
+évaluation individuelle. Les échanges autour du code, l’harmonisation du
+modèle SQL et l’intégration des services illustrent la dépendance réelle
+entre les tâches.</p>
+<p>Les bilans hebdomadaires montrent un développement itératif :
+premières routes et objets métier en septembre ; stabilisation du SQL,
+des DAO et des schémas en octobre ; intégration des traitements
+vectorisés, des formats et de l’authentification début novembre. Les
+tâches ont été croisées : une modification de modèle impactait
+fréquemment d’autres modules.</p>
+<p>La principale difficulté organisationnelle a été la synchronisation
+entre code, tests, SQL et diagrammes, sans quoi plusieurs modules
+décrivaient des signatures incompatibles. Le travail transversal de
+revue et d’intégration apparaît ainsi comme une contribution technique à
+part entière.</p>
+<h1 id="architecture-logicielle-en-couches">6. Architecture logicielle
+en couches</h1>
+<p>Les composants réels sont identifiés par leur rôle et par leur nom.
+Les schémas DjuPointRequest et DjuZoneRequest valident les paramètres
+reçus par dju_controller.py ; DjuService orchestre les fonctions F1 et
+F3 ; TemperatureService.find_candidate_stations et
+estimate_daily_temperatures estiment les températures.
+DjuCalculation.run et run_for_zone appliquent les règles mathématiques.
+Les DAO lisent et écrivent PostgreSQL ; les scripts data/ préparent les
+tables avant le lancement des calculs. Les objets métier n’exécutent pas
+eux-mêmes de SQL.</p>
+<figure>
+<img src="resources/figures/figure_03.png" style="width:93.0%"
+alt="Architecture logique de l’application DJU." />
+<figcaption aria-hidden="true">Architecture logique de l’application
+DJU.</figcaption>
+</figure>
+<h2 id="responsabilités-observées">Responsabilités observées</h2>
+<p>Le chemin suivi par F1 est explicite : requête HTTP <span
+class="math inline">\(\rightarrow\)</span> DjuPointRequest <span
+class="math inline">\(\rightarrow\)</span>
+DjuService.calculate_point_dju <span
+class="math inline">\(\rightarrow\)</span> TemperatureService <span
+class="math inline">\(\rightarrow\)</span> TemperatureReportDao <span
+class="math inline">\(\rightarrow\)</span> DjuCalculation.run <span
+class="math inline">\(\rightarrow\)</span> DjuResponse. Pour F3,
+DjuService demande à ZoneService de vérifier le territoire et les
+droits, consulte DjuDao.find_calculation, puis n’appelle
+TemperatureService et DjuCalculation.run_for_zone qu’en l’absence de
+résultat stocké. Les réponses sont construites par les contrôleurs, en
+JSON ou CSV.</p>
+<p>Cette architecture rend possibles les tests isolés : plusieurs suites
+remplacent les DAO ou les services par des objets factices. Elle limite
+aussi la propagation d’un changement de schéma HTTP dans les algorithmes
+scientifiques.</p>
+<p>La séparation des couches limite les dépendances croisées. Ainsi, le
+contrôleur n’a pas à construire des requêtes SQL, et l’objet DjuType n’a
+pas à connaître la structure JSON d’une réponse FastAPI. Les services
+constituent le point d’orchestration : ils interprètent la demande,
+appellent les DAO et demandent aux objets métier de calculer les
+valeurs. Cette distribution rend possible le remplacement de dépendances
+par des faux objets dans les tests, et facilite le diagnostic lorsqu’une
+requête échoue.</p>
+<p>L’API est montée dans main.py par inclusion de plusieurs routeurs :
+/dju, /zones, /user et /user/zones. Le même point d’entrée configure
+l’environnement et expose une route /health pour vérifier la
+disponibilité du processus. La documentation interactive est fournie
+automatiquement par FastAPI. Il faut cependant distinguer la santé du
+processus et la santé de toute la chaîne : une réponse positive de
+/health ne démontre pas que la base distante possède toutes les
+observations nécessaires au calcul.</p>
+<h1 id="constitution-du-jeu-de-données">7. Constitution du jeu de
+données</h1>
+<p>Deux chaînes d’alimentation indépendantes sont exécutées avant le
+service en ligne. La chaîne météo lit les fichiers CSV.gz Météo-France,
+filtre les dates à partir de 1990 et les colonnes NUM_POSTE, DATE,
+TN/TX, LAT/LON et ALTI, puis produit un Parquet brut et un Parquet
+nettoyé avec TMIN/TMAX et leur provenance. La chaîne administrative
+interroge les API publiques pour obtenir le code INSEE, la région, le
+département, les coordonnées, la population et l’altitude des communes ;
+elle produit ses propres fichiers Parquet. Seul le chargement SQL final
+rassemble les deux sources.</p>
+<figure>
+<img src="resources/figures/figure_04.png" style="width:93.0%"
+alt="Deux traitements F0 distincts : entrées, fichiers intermédiaires et insertion SQL finale." />
+<figcaption aria-hidden="true">Deux traitements F0 distincts : entrées,
+fichiers intermédiaires et insertion SQL finale.</figcaption>
+</figure>
+<h2 id="un-stockage-adapté-aux-usages">Un stockage adapté aux
+usages</h2>
+<p>Le Parquet est un format de travail efficace pendant le nettoyage
+massif. PostgreSQL devient ensuite la source interrogée par l’API ; il
+conserve les stations, relevés, communes, zonages, types et résultats
+des DJU. Le script init_db.py charge les tables selon le schéma défini
+et utilise ON CONFLICT DO NOTHING pour éviter la réinsertion de lignes
+identiques.</p>
+<p>Le compte rendu du 5 novembre mentionne un chargement de 4 555
+stations et d’environ 32 millions de relevés sur la base distante. Ce
+chiffre provient du suivi interne ; il n’a pas été revérifié par une
+requête directe dans cette rédaction.</p>
+<p>La conversion intermédiaire en Parquet répond au caractère massif des
+archives. Les scripts de traitement peuvent manipuler des colonnes
+homogènes sans reparcourir chaque CSV compressé lors d’un nouveau
+chargement de base. Ce stockage est une étape d’alimentation, pas le
+support unique des requêtes en ligne : les DAO de l’application
+exploitent principalement PostgreSQL pour retrouver stations,
+observations, zones et résultats conservés. La distinction entre
+traitement hors ligne et service en ligne évite de placer les
+téléchargements météorologiques dans le chemin critique d’une requête
+utilisateur.</p>
+<p>L’ordre de chargement est aussi une condition d’intégrité. Les
+régions doivent exister avant les départements, les départements avant
+les communes, et les stations avant leurs relevés. Le script init_db.py
+matérialise cet ordre et utilise des insertions par lots pour la
+volumétrie. Les contraintes de clés étrangères, d’unicité et les clauses
+ON CONFLICT empêchent des incohérences évidentes lors d’une relance.
+Cela ne remplace toutefois ni la supervision de l’alimentation ni une
+validation statistique des données importées.</p>
+<h1 id="fiabilisation-des-relevés-météorologiques">8. Fiabilisation des
+relevés météorologiques</h1>
+<p>La qualité est traitée hors ligne par qualite_meteo.py, avant
+l’insertion dans PostgreSQL et avant tout calcul F1/F3. Une mesure Tmin
+ou Tmax hors de <span class="math inline">\([-50 ; +50]\)</span> °C est
+remplacée par une valeur manquante : le script n’élimine pas
+systématiquement toute la série de la station. Il écarte les lignes sans
+aucune température (stations ne mesurant par exemple que la pluie), puis
+réindexe chaque station sur un calendrier quotidien. Les anomalies et
+les manques sont traités séparément pour Tmin et Tmax. Les règles de
+couverture minimale à 65 %, de stations doublonnées à 500 m et de
+température constante pendant 30 jours évoquées dans la conception
+intermédiaire ne sont pas démontrées dans le script actuel : elles ne
+sont donc pas présentées ici comme implémentées.</p>
+<figure>
+<img src="resources/figures/figure_05.png" style="width:93.0%"
+alt="Décision de comblement appliquée selon la longueur initiale du trou." />
+<figcaption aria-hidden="true">Décision de comblement appliquée selon la
+longueur initiale du trou.</figcaption>
+</figure>
+<p>La stratégie est déterminée automatiquement par la longueur initiale
+du trou : de 1 à 2 jours, interpolation linéaire ; de 3 à 7 jours,
+combinaison de 70 % de tendance locale et de 30 % de stations voisines
+corrigées d’un écart moyen ; de 8 à 30 jours, régression multistation si
+les données disponibles suffisent ; au-delà de 30 jours, les valeurs
+manquantes sont conservées. Cinq stations voisines au maximum, dans un
+rayon de 50 km, peuvent participer. Ce n’est pas un paramètre que
+choisit l’utilisateur de l’API au moment du calcul DJU.</p>
+<p>Après comblement, une estimation causant Tmin &gt; Tmax est écartée
+sans supprimer automatiquement toute la station. La sortie nettoyée
+distingue SOURCE_TMIN et SOURCE_TMAX et permet à TemperatureReportDao de
+calculer observed, vrai uniquement si les deux valeurs sont réellement
+observées. DjuResult.observed_ratio donne ensuite la part de jours du
+résultat reposant exclusivement sur des mesures observées ; il ne
+constitue pas un intervalle d’incertitude statistique.</p>
+<p>Un calendrier quotidien complet est reconstruit pour chaque station.
+Cela permet de distinguer l’absence d’une ligne entière d’une
+température nulle ou manquante, puis de calculer sans ambiguïté la
+longueur des trous. La méthode de comblement dépend de cette longueur
+initiale et non du nombre de lignes disponibles dans le fichier
+brut.</p>
+<p>SOURCE_TMIN et SOURCE_TMAX tracent séparément les observations et les
+imputations. Le booléen observed n’est vrai que si Tmin et Tmax sont
+mesurées, pour chaque contribution utilisée ; observed_ratio en résume
+la proportion par période. Ce n’est pas une mesure d’incertitude.</p>
+<h1 id="référentiel-géographique-et-modèle-sql">9. Référentiel
+géographique et modèle SQL</h1>
+<p>Le modèle relationnel est une représentation des vraies tables de
+data/init_db.sql. Son noyau territorial suit la hiérarchie
+<code>regions</code>, <code>departments</code>, puis
+<code>municipalities</code> : chaque table possède une clé primaire
+<code>id</code>, et les codes INSEE sont uniques. La table
+zoning_municipalities réalise la relation plusieurs-à-plusieurs entre
+communes et zonages. Les tables meteo_stations et temperature_reports
+conservent des observations datées ; dju_types, dju_calculations et
+dju_results conservent les paramètres et sorties des calculs
+territoriaux.</p>
+<figure>
+<img src="resources/figures/figure_06.png" style="width:93.0%"
+alt="Schéma relationnel : noms SQL, clés principales, clés étrangères et cardinalités." />
+<figcaption aria-hidden="true">Schéma relationnel : noms SQL, clés
+principales, clés étrangères et cardinalités.</figcaption>
+</figure>
+<p>Un relevé météorologique contient date, station_id, temp_min,
+temp_max et deux informations de provenance source_tmin et source_tmax ;
+l’unicité (station_id, date) évite les doublons. Pour un calcul
+territorial, la paire (mode, base_temperature) identifie un type de DJU,
+et les lignes de dju_results enregistrent period_start, period_end,
+value, days_with_data et observed_ratio. Le schéma dessiné est celui qui
+existe dans le code, pas une base conceptuelle projetée.</p>
+<p>Le fichier SQL actuel ne crée pas de table municipality_temperatures
+alors qu’une DAO portant ce nom subsiste dans le dépôt : le cache de
+séries communales apparaît donc comme une extension non raccordée dans
+la branche examinée.</p>
+<p>Le schéma relationnel distingue plusieurs cardinalités : une région
+contient plusieurs départements ; un département regroupe des communes ;
+une station porte plusieurs relevés datés ; un utilisateur possède
+plusieurs zonages ; un zonage relie plusieurs communes par une table
+d’association. Cette dernière relation évite de recopier les
+caractéristiques d’une commune à chaque création de zone personnalisée.
+Une même commune peut appartenir à plusieurs ensembles sans duplication
+de sa géométrie, de son code INSEE ou de sa population.</p>
+<p>La table dju_calculations conserve le contexte d’un calcul
+territorial : sous-zone, seuil via la table dju_types, période, pas
+temporel, nombre de stations et correction d’altitude. Les lignes de
+dju_results stockent les résultats par période et les indicateurs de
+couverture. Ce découpage sépare ce qui est constant sur la requête des
+valeurs produites pour chaque période. Dans le schéma inspecté, la table
+municipality_temperatures n’est pas créée : cette différence avec la
+conception initiale explique l’absence de réutilisation active des
+séries communales.</p>
+<h1 id="estimation-spatiale-des-températures">10. Estimation spatiale
+des températures</h1>
+<p>Les entrées du traitement spatial sont un dictionnaire locations :
+{identifiant_du_lieu : (latitude, longitude, altitude_ou_None)}, le
+nombre de stations N de 1 à 10 et la période de dates.
+TemperatureService.find_candidate_stations sélectionne les stations
+parmi au plus 50 candidates par lieu et fait lire leurs observations par
+TemperatureReportDao.get_reports_dataframe ; seules les stations ayant
+des relevés sur la période sont retenues. La sortie intermédiaire
+associe à chaque station/date une température moyenne (Tmin + Tmax)/2 et
+une provenance observée ou imputée.</p>
+<p>La fonction Haversine mesure la distance dᵢ (km) entre le lieu et la
+station i. Les poids spatiaux sont wᵢ = 1/max(dᵢ, 0,01 km)² et ne
+dépendent pas de la date ; ils sont donc calculés une fois par lieu. La
+température estimée au jour t est T̂(t) = Σᵢ wᵢ(t) × Tᵢ,corrigée(t) / Σᵢ
+wᵢ(t), les poids des stations sans valeur étant exclus ce jour-là. La
+sortie est un couple de DataFrame Pandas indexés par date, avec une
+colonne par lieu : température estimée et indicateur observed.</p>
+<figure>
+<img src="resources/figures/figure_07.png" style="width:93.0%"
+alt="Chaîne d’estimation et de correction d’un point géographique." />
+<figcaption aria-hidden="true">Chaîne d’estimation et de correction d’un
+point géographique.</figcaption>
+</figure>
+<h2 id="correction-altimétrique">Correction altimétrique</h2>
+<p>Lorsque l’altitude cible est fournie, la température de chaque
+station est ramenée au niveau du lieu cible selon la formule :</p>
+<p><span class="math display">\[
+T_{\mathrm{corrigée}} = T_{\mathrm{station}} - 0{,}0065 \times
+(z_{\mathrm{cible}} - z_{\mathrm{station}}),
+\]</span></p>
+<p>où les altitudes sont exprimées en mètres. Sans altitude cible,
+aucune correction n’est appliquée. Cette simplification est conforme au
+sujet mais ne modélise pas les microclimats. Les opérations sont
+vectorisées dans NumPy/Pandas : il n’existe pas de raison physique de
+recalculer la distance ou le poids d’une station à chaque jour.</p>
+<p>Les coordonnées latitude–longitude imposent une mesure de distance
+sur la sphère : la méthode Haversine fournit le classement des
+candidates. Une station est conservée seulement si elle possède des
+relevés pendant la période demandée ; sinon, le service cherche une
+remplaçante parmi les candidates suivantes. Une même station n’est lue
+qu’une fois si elle dessert plusieurs communes du lot.</p>
+<p>Pour chaque date, les poids sont renormalisés sur les seules stations
+possédant une valeur : une observation absente ne doit pas rester dans
+le dénominateur. Si aucune station utilisable n’a de valeur, la
+température demeure manquante au lieu de prendre artificiellement la
+valeur zéro.</p>
+<h1 id="choix-et-robustesse-de-linterpolation">11. Choix et robustesse
+de l’interpolation</h1>
+<p>Le nombre de stations demandé peut aller de 1 à 10 ; trois stations
+constituent la valeur par défaut. Pour chaque lieu, le code examine au
+maximum 50 stations candidates, ordonnées par proximité. Lorsqu’une
+station n’a aucun relevé durant la période, elle est remplacée par une
+station candidate suivante, si possible. Une même station partagée entre
+plusieurs communes n’est chargée qu’une fois dans un lot de
+requêtes.</p>
+<h2 id="gestion-des-absences-au-jour-le-jour">Gestion des absences au
+jour le jour</h2>
+<p>La sélection d’une station disponible sur la période ne garantit pas
+une mesure chaque jour. La moyenne pondérée est donc recalculée, à
+chaque date, sur les seules stations dont la température du jour est
+renseignée. Si aucune n’est exploitable, la température estimée demeure
+manquante ; elle n’est pas inventée à partir d’une station distante hors
+du jeu sélectionné.</p>
+<p>Le service renvoie également un booléen de provenance : un jour n’est
+considéré comme entièrement observé que si toutes les températures
+effectivement utilisées proviennent de mesures observées. Cette
+information devient observed_ratio après agrégation des DJU.</p>
+<h2 id="principaux-compromis">Principaux compromis</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Choix</th>
+<th style="text-align: left;">Bénéfice</th>
+<th style="text-align: left;">Limite</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Pondération 1/d²</td>
+<td style="text-align: left;">Favorise les stations proches</td>
+<td style="text-align: left;">Sensible à la densité locale</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">N = 3 par défaut</td>
+<td style="text-align: left;">Coût raisonnable</td>
+<td style="text-align: left;">Sous-échantillonnage possible</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Correction 0,65 °C / 100 m</td>
+<td style="text-align: left;">Prend en compte le relief</td>
+<td style="text-align: left;">Gradient atmosphérique simplifié</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Calculs vectorisés</td>
+<td style="text-align: left;">Moins de boucles Python</td>
+<td style="text-align: left;">Mémoire proportionnelle au lot</td>
+</tr>
+</tbody>
+</table>
+<p>Un poids inversement proportionnel au carré de la distance favorise
+fortement les stations proches tout en permettant de mobiliser une
+observation plus éloignée lorsque la plus proche est indisponible. Pour
+éviter une division par zéro au droit même d’une station, le code borne
+la distance à une petite valeur positive. Ce mécanisme est un choix de
+robustesse numérique ; il ne transforme pas automatiquement le modèle en
+mesure parfaite au point cible. Un contrôle de sensibilité sur
+différents nombres de stations resterait utile pour évaluer son
+impact.</p>
+<p>La correction altimétrique repose sur un gradient fixe : pour une
+différence de 200 mètres entre la station et le lieu plus élevé, la
+température est diminuée de 1,3 °C. L’ordre des opérations a son
+importance : chaque température de station est d’abord ramenée à
+l’altitude cible, puis la moyenne pondérée est calculée. L’hypothèse de
+gradient constant est explicite et facile à reproduire, mais elle est
+moins adaptée aux inversions thermiques et aux situations locales
+complexes. Il s’agit d’un compromis entre simplicité, données
+disponibles et coût du calcul.</p>
+<h1 id="calcul-et-agrégation-des-dju">12. Calcul et agrégation des
+DJU</h1>
+<p>La classe DjuType calcule les DJU quotidiens. La classe
+DjuCalculation les rassemble par période de calendrier : jour, semaine
+ISO (lundi à dimanche), mois ou année. Les bornes de chaque résultat
+sont ramenées à l’intervalle réellement demandé. Un mois commencé le 10
+n’est donc présenté qu’à partir du 10, même si son cadre calendaire est
+plus large.</p>
+<figure>
+<img src="resources/figures/figure_08.png" style="width:93.0%"
+alt="Exemple fictif : distribution des DJU quotidiens avant leur cumul mensuel." />
+<figcaption aria-hidden="true">Exemple fictif : distribution des DJU
+quotidiens avant leur cumul mensuel.</figcaption>
+</figure>
+<h2 id="agrégation-spatiale">Agrégation spatiale</h2>
+<p>Pour les territoires, chaque commune obtient un DJU par jour. À la
+date t, la moyenne de la zone est pondérée par la population des
+communes pour lesquelles une valeur existe : DJUzone(t) = Σ populationᵢ
+× DJUᵢ(t) / Σ populationᵢ. Les communes sans population renseignée sont
+écartées, sauf si toutes les populations sont absentes ou nulles : une
+moyenne simple est alors utilisée.</p>
+<p>Le système somme ensuite les DJU zonaux sur le pas de temps demandé
+et renvoie pour chaque période days_with_data et observed_ratio. Il ne
+remplace pas implicitement les journées manquantes par zéro.</p>
+<p>Les regroupements temporels sont définis à partir du calendrier, non
+de la position du premier relevé disponible. Une requête couvrant du 10
+au 25 février doit donc conserver ces bornes dans le résultat de
+février, même si certaines journées n’ont pas pu être évaluées. Pour une
+semaine, la convention ISO signifie du lundi au dimanche, avec bornes
+réduites à l’intervalle demandé. Ces règles évitent de faire passer une
+somme sur vingt jours pour un cumul mensuel intégral.</p>
+<p>Pour l’agrégation spatiale, une commune sans population exploitable
+reçoit un poids nul lorsque d’autres poids existent. Si toutes les
+populations sont absentes ou égales à zéro, le système bascule vers une
+moyenne simple : ce cas dégénéré est traité explicitement dans les
+tests. Une autre subtilité est la disponibilité quotidienne : le
+dénominateur pondéré ne comprend que les communes ayant une valeur ce
+jour. L’agrégation porte donc sur la partie effectivement observable du
+territoire et l’absence de données doit être signalée par les
+indicateurs de couverture.</p>
+<h1 id="f1-dju-ponctuel-par-api">13. F1 : DJU ponctuel par API</h1>
+<p>F1 reçoit un <code>DjuPointRequest</code> : latitude comprise entre
+-90 et 90, longitude entre -180 et 180, altitude facultative,
+<code>start_date</code>, <code>end_date</code>,
+<code>heating_threshold</code> et/ou <code>cooling_threshold</code>,
+<code>number_of_stations</code> compris entre 1 et 10 (défaut : 3), et
+<code>time_step</code> parmi <code>day</code>, <code>week</code>,
+<code>month</code>, <code>year</code> (défaut : <code>day</code>).
+Pydantic produit 422 si un champ est mal formé ;
+DjuService._check_request renvoie 400 si les dates sont inversées ou si
+les deux seuils sont absents, puis intersectionne la période demandée
+avec les dates disponibles.</p>
+<figure>
+<img src="resources/figures/figure_09.png" style="width:93.0%"
+alt="Séquence F1 : objets, méthodes et structures échangées entre les couches." />
+<figcaption aria-hidden="true">Séquence F1 : objets, méthodes et
+structures échangées entre les couches.</figcaption>
+</figure>
+<p>La fonction TemperatureService.estimate_daily_temperatures renvoie
+deux séries utiles à DjuCalculation.run : les moyennes quotidiennes et
+le booléen de provenance. Une unique estimation est réutilisée si
+chauffage et climatisation sont demandés ensemble ; si seul
+cooling_threshold est fourni, aucun calcul de chauffage n’est exécuté.
+La sortie DjuResponse regroupe les DjuResult par mode et porte warning
+lorsque la période a été raccourcie. F1 n’écrit pas de cache de
+résultats en base.</p>
+<h2 id="exemple-de-demande">Exemple de demande</h2>
+<p>Sur un calcul ponctuel, la route ne reçoit aucun identifiant de zone
+: l’API crée un objet DjuCalculation portant directement les coordonnées
+et les paramètres de l’estimation. La recherche des stations et la
+lecture des séries sont mutualisées pour les deux modes ; seules les
+formules de seuil divergent ensuite. Cette mutualisation réduit le coût
+d’un calcul demandant simultanément chauffage et climatisation,
+puisqu’il n’est pas nécessaire d’exécuter deux recherches géographiques
+indépendantes.</p>
+<p>L’interface repose sur des types explicites : date au format ISO,
+seuil numérique, nombre de stations borné, choix du pas parmi day, week,
+month et year. Une erreur sur un champ est rejetée automatiquement par
+Pydantic, tandis qu’une incohérence entre plusieurs champs fait l’objet
+d’une règle dans le service. Cette distinction illustre un principe de
+conception réutilisable : la validation syntaxique relève du contrat
+d’entrée et la validation métier relève de la couche qui détient la
+règle scientifique.</p>
+<h1 id="démonstration-documentée-du-calcul-ponctuel">14. Démonstration
+documentée du calcul ponctuel</h1>
+<p>Cette démonstration distingue trois niveaux de preuve : le contrat de
+requête, la formule numérique et le résultat JSON attendu. La réponse
+ci-dessous est calculée sur un JEU SYNTHÉTIQUE (températures
+explicitement posées) : ce n’est ni une capture d’un serveur distant ni
+une mesure effectuée sur les relevés PostgreSQL. Le code qui définit la
+structure est api/src/schema/dju_schema.py et
+api/src/controllers/dju_controller.py.</p>
+<h2 id="requête-conforme-à-djupointrequest">Requête conforme à
+DjuPointRequest</h2>
+<pre class="http"><code>POST /dju/point?format=json
+Content-Type: application/json
+
+{
+  &quot;latitude&quot;: 48.11,
+  &quot;longitude&quot;: -1.68,
+  &quot;start_date&quot;: &quot;2020-01-10&quot;,
+  &quot;end_date&quot;: &quot;2020-01-11&quot;,
+  &quot;heating_threshold&quot;: 18,
+  &quot;cooling_threshold&quot;: 24,
+  &quot;number_of_stations&quot;: 3,
+  &quot;time_step&quot;: &quot;day&quot;
+}</code></pre>
+<h2 id="résultat-attendu-sur-deux-températures-fictives">Résultat
+attendu sur deux températures fictives</h2>
+<p>Prenons les températures moyennes journalières conventionnelles 8 °C
+et 15 °C ; supposons que le premier jour repose intégralement sur des
+mesures observées et que le second comporte au moins une valeur imputée.
+Les DJU de chauffage valent alors 10 et 3, ceux de climatisation valent
+0 et 0. La réponse ci-dessous illustre les champs réellement définis par
+DjuResultItem et DjuResponse.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;results&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;heating&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="dt">&quot;period_start&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span><span class="dt">&quot;period_end&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="fl">10.0</span><span class="fu">,</span><span class="dt">&quot;days_with_data&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">,</span><span class="dt">&quot;observed_ratio&quot;</span><span class="fu">:</span><span class="fl">1.0</span><span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="dt">&quot;period_start&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-11&quot;</span><span class="fu">,</span><span class="dt">&quot;period_end&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-11&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="fl">3.0</span><span class="fu">,</span><span class="dt">&quot;days_with_data&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">,</span><span class="dt">&quot;observed_ratio&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="er">.</span><span class="dv">0</span><span class="fu">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;cooling&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="dt">&quot;period_start&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span><span class="dt">&quot;period_end&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="er">.</span><span class="dv">0</span><span class="fu">,</span><span class="dt">&quot;days_with_data&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">,</span><span class="dt">&quot;observed_ratio&quot;</span><span class="fu">:</span><span class="fl">1.0</span><span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="dt">&quot;period_start&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-11&quot;</span><span class="fu">,</span><span class="dt">&quot;period_end&quot;</span><span class="fu">:</span><span class="st">&quot;2020-01-11&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="er">.</span><span class="dv">0</span><span class="fu">,</span><span class="dt">&quot;days_with_data&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">,</span><span class="dt">&quot;observed_ratio&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="er">.</span><span class="dv">0</span><span class="fu">}</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;warning&quot;</span><span class="fu">:</span> <span class="kw">null</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>Interprétation : <code>days_with_data</code> indique les dates
+effectivement calculées ; observed_ratio porte sur la proportion de ces
+dates construites exclusivement à partir de mesures observées. Si
+l’utilisateur ne transmet que cooling_threshold, la clé heating
+n’apparaît pas. Si la période demandée dépasse la disponibilité globale
+des relevés, la date est réduite et warning l’explique.</p>
+<h1 id="f2-consultation-des-zones-officielles">15. F2 : Consultation des
+zones officielles</h1>
+<p>La route GET /zones permet de lister les régions, les départements ou
+les deux, via type=region, type=department ou type=all. Elle fournit
+volontairement des objets légers : identifiant, nom, type et code INSEE.
+Ce choix évite de transmettre d’emblée les milliers de communes
+lorsqu’un client cherche simplement la zone souhaitée.</p>
+<h2 id="consultation-détaillée">Consultation détaillée</h2>
+<p>La route GET /zones/{zone_type}/{zone_id} renvoie les communes d’une
+région ou d’un département ciblé, avec leur nom et leur code INSEE. Les
+types autorisés sont explicitement limités aux valeurs reconnues par la
+route. Une zone inconnue produit une erreur 404 ; un type non valide est
+rejeté au niveau de la validation.</p>
+<h2 id="parcours-utilisateur">Parcours utilisateur</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Étape</th>
+<th style="text-align: left;">Exemple</th>
+<th style="text-align: left;">Information obtenue</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: left;"><code>GET /zones?type=region</code></td>
+<td style="text-align: left;">Liste courte des régions</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">Choix d’un identifiant de région</td>
+<td style="text-align: left;">Identifiant de la cible</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3</td>
+<td style="text-align: left;"><code>GET /zones/region/{id}</code></td>
+<td style="text-align: left;">Région et communes associées</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">4</td>
+<td style="text-align: left;"><code>POST /dju/zone</code></td>
+<td style="text-align: left;">Calcul pour cette zone ou ses
+subdivisions</td>
+</tr>
+</tbody>
+</table>
+<p>Cette séparation entre liste et détail est un ajustement apporté au
+modèle initial, dans lequel une liste exhaustive aurait rendu la réponse
+inutilement volumineuse. L’API ne propose pas encore la recherche d’une
+commune par son nom ; le suivi du 12 novembre la classe parmi les
+améliorations secondaires.</p>
+<p>La consultation des zonages officiels joue un rôle d’exploration
+préalable. Le client commence par identifier un nom ou un code pertinent
+dans une liste de régions et de départements ; il utilise ensuite
+l’identifiant interne retourné pour demander le détail ou effectuer un
+calcul territorial. Le choix de deux routes, liste et détail, évite
+d’imposer à chaque consultation le transfert des listes communales
+complètes. L’amélioration concerne donc la lisibilité des réponses comme
+la maîtrise du volume JSON.</p>
+<p>Le code INSEE représente une identité administrative stable à
+l’échelle des données utilisées, tandis que l’identifiant numérique de
+la base sert aux relations SQL et aux routes. Confondre ces deux valeurs
+serait une source fréquente d’erreurs pour un client. La documentation
+et les exemples doivent donc expliciter quel identifiant chaque chemin
+attend. Une recherche textuelle de commune n’est pas exposée dans la
+version inspectée ; son ajout améliorerait l’ergonomie sans modifier le
+moteur de calcul DJU proprement dit.</p>
+<h1 id="f3-dju-sur-un-territoire">16. F3 : DJU sur un territoire</h1>
+<p>F3 reçoit un DjuZoneRequest : zone_type = region, department ou
+zoning ; zone_id = identifiant numérique interne, aggregation_level =
+zone, department ou municipality ; dates, seuil(s), nombre de stations,
+use_altitude et time_step. ZoneService.get_zone charge les communes (ou
+vérifie la propriété du zonage personnel), puis get_sub_zones définit la
+granularité de restitution. Entrée métier : un territoire et des
+paramètres de calcul ; sortie : DjuZoneResponse contenant zones[], leurs
+résultats par mode et un avertissement éventuel de période.</p>
+<figure>
+<img src="resources/figures/figure_10.png" style="width:93.0%"
+alt="Séquence F3 : droits, identification des sous-zones, cache et calcul spatial." />
+<figcaption aria-hidden="true">Séquence F3 : droits, identification des
+sous-zones, cache et calcul spatial.</figcaption>
+</figure>
+<p>Pour chaque couple sous-zone/type de DJU, DjuDao.find_calculation
+recherche un calcul de même zone, seuil, période, pas de temps, nombre
+de stations et option d’altitude. En cas de succès,
+get_calculation_results relit les DjuResult ; en cas d’absence,
+TemperatureService.get_municipality_temperatures estime des tableaux
+Pandas par commune, DjuCalculation.run_for_zone calcule la moyenne
+pondérée et DjuDao.save_calculation enregistre le résultat. Cette
+branche n’est parcourue que pour les calculs manquants.</p>
+<p>Le découpage par département est refusé pour un zonage personnalisé,
+car celui-ci n’est pas structuré par la même hiérarchie que les régions
+officielles. Le contrôle de propriété d’un zonage personnel précède le
+calcul afin d’éviter l’accès aux zones d’autrui.</p>
+<p>Le calcul zonal prolonge le calcul en un point, mais son ordre de
+grandeur diffère. Une région peut regrouper plusieurs milliers de
+communes, chacune pouvant mobiliser plusieurs stations et des années de
+mesures quotidiennes. Le code évite donc la succession naïve « une
+commune, une requête SQL, un calcul complet » : il rassemble l’ensemble
+des communes à calculer, récupère les stations et les relevés communs,
+puis construit des tableaux de dates et de communes pour traiter les
+agrégations avec NumPy et Pandas.</p>
+<p>Pour chaque sous-zone et chaque seuil, DjuService construit une clé
+complète de recherche du cache. Lorsqu’une valeur existe, les résultats
+sont relus sans refaire l’estimation. Sinon, les températures sont
+préparées, les DJU de chaque commune calculés et les résultats
+territoriaux enregistrés. Les réponses regroupent les valeurs par
+sous-zone et par mode. Cette organisation convient au traitement de
+territoires composites, même si elle ne supprime pas le coût initial
+potentiellement élevé d’un premier calcul sur une très grande
+emprise.</p>
+<h1 id="démonstration-territoriale-et-preuve-de-cohérence">17.
+Démonstration territoriale et preuve de cohérence</h1>
+<p>Le parcours territorial ajoute deux opérations au calcul ponctuel :
+la décomposition d’une zone et l’agrégation des communes pondérée par la
+population. Le contrôle d’accès à un zonage personnalisé s’effectue
+avant le calcul. Une requête identique sur une zone officielle peut
+ensuite relire un résultat en cache.</p>
+<h2 id="requête-http-et-interprétation-des-paramètres">Requête HTTP et
+interprétation des paramètres</h2>
+<pre class="http"><code>POST /dju/zone?format=json
+Content-Type: application/json
+
+{
+  &quot;zone_type&quot;: &quot;department&quot;, &quot;zone_id&quot;: 35,
+  &quot;aggregation_level&quot;: &quot;zone&quot;,
+  &quot;start_date&quot;: &quot;2020-01-10&quot;, &quot;end_date&quot;: &quot;2020-01-10&quot;,
+  &quot;heating_threshold&quot;: 18, &quot;number_of_stations&quot;: 3,
+  &quot;use_altitude&quot;: true, &quot;time_step&quot;: &quot;day&quot;
+}</code></pre>
+<p>Ici, 35 est l’identifiant utilisé par la fixture de test pour le
+département d’Ille-et-Vilaine ; pour une véritable base PostgreSQL, il
+faut utiliser l’identifiant renvoyé par GET /zones, et non supposer
+qu’il égale le code INSEE.</p>
+<h2 id="une-moyenne-territoriale-vérifiable">Une moyenne territoriale
+vérifiable</h2>
+<p>Exemple pédagogique : deux communes, de populations 1 000 et 3 000,
+ont respectivement 12 et 8 DJU ce jour-là. La somme pondérée (1 000 × 12
++ 3 000 × 8) / (1 000 + 3 000) vaut exactement 9 DJU. Dans le format
+zonal, le résultat se place dans zones, puis results, puis heating.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;zones&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;zone_type&quot;</span><span class="fu">:</span> <span class="st">&quot;department&quot;</span><span class="fu">,</span> <span class="dt">&quot;zone_id&quot;</span><span class="fu">:</span> <span class="dv">35</span><span class="fu">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;Ille-et-Vilaine&quot;</span><span class="fu">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;results&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;heating&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;period_start&quot;</span><span class="fu">:</span> <span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;period_end&quot;</span><span class="fu">:</span> <span class="st">&quot;2020-01-10&quot;</span><span class="fu">,</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;value&quot;</span><span class="fu">:</span> <span class="fl">9.0</span><span class="fu">,</span> <span class="dt">&quot;days_with_data&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;observed_ratio&quot;</span><span class="fu">:</span> <span class="fl">1.0</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">]</span><span class="fu">}</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;warning&quot;</span><span class="fu">:</span> <span class="kw">null</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>Ce JSON est reconstruit à partir du contrat de réponse et d’un jeu de
+communes fictif. Il ne prouve pas que ces DJU ont été mesurés pour le
+département réel. Pour constituer une preuve d’intégration complète,
+l’équipe doit conserver une sortie réelle issue de /docs ou d’un POST
+HTTP relié à la base alimentée, avec date, paramètres et commit
+utilisés.</p>
+<h2
+id="trace-de-contrôle-reproductible-une-fois-le-serveur-démarré">Trace
+de contrôle reproductible, une fois le serveur démarré</h2>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://localhost:5001/health</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="st">&#39;http://localhost:5001/zones?type=department&#39;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Puis POST /dju/zone via /docs avec l&#39;identifiant réel</span></span></code></pre></div>
+<h1 id="f4-comptes-et-zonages-personnalisés">18. F4 : Comptes et zonages
+personnalisés</h1>
+<p>Les zonages personnalisés répondent à un besoin absent de la
+hiérarchie administrative classique : analyser un portefeuille de
+communes, une aire de projet ou une zone fonctionnelle choisie par
+l’utilisateur. Un compte est nécessaire pour enregistrer durablement ces
+ensembles, nommés et décrits par leur propriétaire.</p>
+<figure>
+<img src="resources/figures/figure_11.png" style="width:93.0%"
+alt="Gestion d’un zonage et invalidation des résultats devenus obsolètes." />
+<figcaption aria-hidden="true">Gestion d’un zonage et invalidation des
+résultats devenus obsolètes.</figcaption>
+</figure>
+<p>L’inscription utilise POST /user/register ; l’authentification POST
+/user/login renvoie un jeton JWT signé en HS256, valable 24 heures. Les
+mots de passe sont stockés sous forme de hash bcrypt. Les routes
+/user/zones exigent un jeton valide, puis comparent le propriétaire de
+la zone avec l’utilisateur authentifié.</p>
+<h2 id="cycle-de-vie">Cycle de vie</h2>
+<p>Un zonage peut être créé à partir d’un nom et de codes INSEE connus,
+consulté, enrichi ou réduit, puis supprimé. Une modification de sa
+composition invalide les calculs territoriaux auparavant enregistrés
+afin d’éviter de restituer des valeurs construites sur l’ancienne liste
+de communes.</p>
+<p>Le jeton JWT transporte l’identité de l’utilisateur et une date
+d’expiration ; il n’est pas une autorisation générale sur toutes les
+ressources. À chaque accès à un zonage privé, le service charge l’objet
+puis vérifie explicitement l’identité de son propriétaire. Sans jeton,
+la réponse attendue est 401 ; pour un autre propriétaire, 403 ; pour une
+ressource inexistante, 404. Cette vérification doit demeurer dans la
+logique métier même si la route annonce déjà une dépendance
+d’authentification.</p>
+<p>La modification d’une liste de communes implique une invalidation des
+calculs qui en dépendent. Sans elle, une requête identique en apparence
+pourrait relire un résultat calculé à partir d’un ancien périmètre. Le
+code d’actualisation supprime donc les résultats mémorisés associés au
+zonage après une mise à jour ; la suppression de zone entraîne également
+un nettoyage. Ce lien entre gestion d’objet et cache est un enjeu de
+cohérence plus subtil que la seule capacité à créer une ressource.</p>
+<h1 id="fo2-et-fo3-sorties-et-imports">19. FO2 et FO3 : Sorties et
+imports</h1>
+<p>FO2 sélectionne le format de réponse via ?format=json (par défaut) ou
+?format=csv. La sortie CSV contient zone, mode, period_start,
+period_end, value, days_with_data et observed_ratio. En JSON,
+DjuResponse regroupe les séries par mode ; DjuZoneResponse regroupe
+d’abord les sous-zones puis leurs modes. Si la période a été réduite, le
+champ warning est renseigné en JSON ; la réponse CSV du contrôleur n’a
+pas de colonne warning, limite à signaler pour son interprétation.</p>
+<h2 id="exemple-de-table-csv-données-illustratives">Exemple de table CSV
+(données illustratives)</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">zone</th>
+<th style="text-align: left;">mode</th>
+<th style="text-align: left;">period_start</th>
+<th style="text-align: left;">period_end</th>
+<th style="text-align: right;">value</th>
+<th style="text-align: right;">days_with_data</th>
+<th style="text-align: right;">observed_ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">point</td>
+<td style="text-align: left;">heating</td>
+<td style="text-align: left;">2020-01-10</td>
+<td style="text-align: left;">2020-01-10</td>
+<td style="text-align: right;">10.0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">point</td>
+<td style="text-align: left;">cooling</td>
+<td style="text-align: left;">2020-01-10</td>
+<td style="text-align: left;">2020-01-10</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.0</td>
+</tr>
+</tbody>
+</table>
+<p>FO3 permet d’importer un zonage via POST /user/zones/import. Un corps
+JSON fournit filename et content, éventuellement name et description. Le
+contenu est interprété comme CSV ou JSON selon l’extension du nom de
+fichier. Les CSV peuvent contenir une colonne code_insee ou placer les
+codes dans la première colonne ; le JSON accepte une liste ou un objet
+contenant codes_insee.</p>
+<h2 id="contrôles-essentiels">Contrôles essentiels</h2>
+<p>Les codes sont nettoyés, les doublons supprimés et les codes inconnus
+explicitement signalés. Le serveur refuse les extensions inattendues,
+les contenus invalides et les zonages vides. Ce choix d’import par texte
+JSON évite la dépendance python-multipart, mais oblige le client à
+transmettre le contenu textuel du fichier.</p>
+<p>Le CSV répond au besoin d’exploiter le résultat dans un tableur ou un
+logiciel statistique, alors que le JSON conserve un objet structuré
+utilisable par un client web ou un script. Le choix du format ne change
+pas les valeurs calculées : les deux sorties utilisent les objets
+DjuCalculation et DjuResult produits par la même couche métier. Cette
+unicité évite de maintenir deux chaînes scientifiques différentes qui
+pourraient diverger sur les arrondis, les bornes ou la prise en compte
+des trous de données.</p>
+<p>L’import de zonages suit l’approche inverse : un ensemble de codes
+INSEE arrive sous forme de texte CSV/JSON et est normalisé avant toute
+écriture. Les codes vides et les doublons sont éliminés, puis chaque
+code restant doit correspondre à une commune de la base. Un import n’est
+donc pas seulement un problème de lecture de fichier ; c’est aussi une
+opération d’intégrité du référentiel. L’absence de mécanisme multipart
+rend la route plus simple à déployer, au prix d’une étape supplémentaire
+côté client pour lire le contenu du fichier.</p>
+<h1 id="contrats-http-et-traitement-des-erreurs">20. Contrats HTTP et
+traitement des erreurs</h1>
+<p>Une API utilisable ne se limite pas à renvoyer des nombres. Elle doit
+aussi différencier une entrée invalide, une période sans observation,
+une zone inconnue, un manque d’authentification et une tentative d’accès
+à une ressource privée. Les schémas Pydantic constituent la première
+ligne de validation ; les services relèvent ensuite des ServiceError
+converties en réponses HTTP.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Code</th>
+<th style="text-align: left;">Situation documentée</th>
+<th style="text-align: left;">Exemple</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">200</td>
+<td style="text-align: left;">Calcul ou consultation réussis</td>
+<td style="text-align: left;"><code>POST /dju/point</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">201</td>
+<td style="text-align: left;">Création de ressource</td>
+<td style="text-align: left;"><code>POST /user/zones</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">204</td>
+<td style="text-align: left;">Suppression effectuée</td>
+<td style="text-align: left;"><code>DELETE /user/zones/{id}</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">400</td>
+<td style="text-align: left;">Règle métier impossible</td>
+<td style="text-align: left;">Aucun seuil, dates inversées</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">401</td>
+<td style="text-align: left;">Authentification absente ou erronée</td>
+<td style="text-align: left;">Accès aux zonages sans jeton</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">403</td>
+<td style="text-align: left;">Droits insuffisants</td>
+<td style="text-align: left;">Zonage d’un autre utilisateur</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">404</td>
+<td style="text-align: left;">Ressource ou relevés absents</td>
+<td style="text-align: left;">Zone inexistante</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">409</td>
+<td style="text-align: left;">Conflit de création</td>
+<td style="text-align: left;">Nom d’utilisateur déjà pris</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">422</td>
+<td style="text-align: left;">Erreur de schéma</td>
+<td style="text-align: left;">Pas temporel ou coordonnées invalides</td>
+</tr>
+</tbody>
+</table>
+<p>La réponse comporte parfois warning lorsque l’intervalle demandé est
+plus large que les données réellement disponibles. Ce comportement est
+préférable à une extrapolation silencieuse, car il permet au client de
+distinguer une période calculée d’une période demandée.</p>
+<p>Il reste utile de documenter, dans un client futur, le sens exact de
+observed_ratio : il traduit la proportion de journées calculées
+exclusivement à partir de relevés observés, et non une mesure
+statistique d’incertitude.</p>
+<p>Les codes de réponse permettent à un consommateur d’API de savoir si
+une correction de sa requête est possible. Un 422 indique un type ou une
+valeur incompatible avec le schéma attendu ; un 400 correspond notamment
+à une contradiction logique, comme une date de début postérieure à la
+fin ou l’absence de seuil. Une réponse 404 peut signaler une zone
+inexistante ou aucune station exploitable ; le message d’erreur doit
+alors préciser quelle ressource manque, faute de quoi le client ne peut
+pas distinguer une erreur de géographie d’une lacune météorologique.</p>
+<p>Les avertissements doivent être lus avec la même attention que les
+erreurs. Une requête allant au-delà de la dernière observation
+disponible peut produire un calcul partiel parfaitement cohérent, mais
+celui-ci n’a pas la couverture temporelle demandée. Exposer warning et
+days_with_data rend cette situation visible. Pour une exploitation de
+résultats, un tableau de bord devrait afficher ces métadonnées à côté
+des DJU et éviter de comparer directement deux périodes dont la
+couverture n’est pas comparable.</p>
+<h1 id="persistance-cache-et-performance">21. Persistance, cache et
+performance</h1>
+<p>Les requêtes territoriales de F3 sont potentiellement coûteuses :
+chaque commune requiert une interpolation sur des stations et des dates.
+Le service évite les requêtes par commune en regroupant les lectures de
+relevés et en vectorisant les matrices date × commune. Il persiste
+ensuite seulement les résultats zonaux par configuration de calcul, non
+tous les appels de l’API. F1 ne stocke pas ses résultats ; la classe
+MunicipalityTemperatureDao n’est pas branchée dans le calcul des
+communes.</p>
+<figure>
+<img src="resources/figures/figure_12.png" style="width:93.0%"
+alt="Mécanisme de relecture ou calcul d’un résultat territorial." />
+<figcaption aria-hidden="true">Mécanisme de relecture ou calcul d’un
+résultat territorial.</figcaption>
+</figure>
+<p>La clé de cache comprend la zone et son identifiant, le type de DJU
+(donc le seuil), les dates, le pas de temps, le nombre de stations et la
+prise en compte de l’altitude. Les calculs ponctuels, eux, sont
+explicitement déclarés « sans stockage » dans DjuService. Une DAO de
+températures communales existe, mais son stockage ne fait pas partie du
+chemin actif décrit dans TemperatureService.</p>
+<p>La vectorisation NumPy/Pandas permet d’estimer les communes par lots
+plutôt qu’en relançant chaque fois des requêtes individuelles.
+Toutefois, le suivi du 12 novembre demande encore de chronométrer une
+région entière et la France : aucune durée cible validée ne peut donc
+être annoncée.</p>
+<p>La recherche d’un calcul territorial utilise une clé qui incorpore
+toutes les variables susceptibles de faire varier le résultat. Oublier
+le seuil ou le nombre de stations rendrait le cache faux, même si les
+identifiants de territoire et les dates sont identiques. À l’inverse,
+relire un calcul réellement équivalent économise les interpolations et
+les agrégations. La méthode DjuDao.find_calculation sélectionne le
+dernier enregistrement correspondant, tandis que DjuDao.save_calculation
+conserve la valeur et ses résultats temporels.</p>
+<p>La seule présence d’un cache ne prouve pas une performance
+satisfaisante. Pour l’évaluer, il faudrait comparer un premier calcul
+sans résultat stocké, un second calcul identique avec résultat présent
+et un calcul portant sur une période longue. Les mesures pertinentes
+incluraient le temps total, le temps SQL, le nombre de lignes
+transférées et l’usage mémoire. Les notes d’équipe identifient
+précisément cette mesure à l’échelle d’une région et de la France comme
+un chantier prioritaire ; elle reste distincte des optimisations déjà
+lisibles dans le code.</p>
+<h1 id="de-la-conception-à-limplémentation-écarts-expliqués">22. De la
+conception à l’implémentation : écarts expliqués</h1>
+<p>L’une des leçons du projet est que le dossier intermédiaire décrivait
+un objectif ; la branche actuelle documente un état d’implémentation.
+Pour ne pas répéter des inexactitudes, la comparaison ci-dessous
+distingue explicitement intention, réalisation et conséquence pour
+l’utilisateur. Les lignes sont vérifiées dans les services, les schémas
+et la définition SQL.</p>
+<h2 id="matrice-décarts-entre-le-dossier-initial-et-le-code">Matrice
+d’écarts entre le dossier initial et le code</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Intention initiale</th>
+<th style="text-align: left;">État du code inspecté</th>
+<th style="text-align: left;">Conséquence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Cache pour les points et les
+territoires</td>
+<td style="text-align: left;"><code>calculate_point_dju()</code> ne
+stocke rien ; <code>calculate_zone_dju()</code> utilise le cache
+SQL</td>
+<td style="text-align: left;">Ne pas annoncer de persistance générale
+pour F1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Températures communales réutilisables</td>
+<td style="text-align: left;"><code>MunicipalityTemperatureDao</code>
+existe mais n’est pas utilisée ; table absente dans
+<code>init_db.sql</code></td>
+<td style="text-align: left;">Signaler un cache communal non
+intégré</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Lecture et édition des zones
+officielles</td>
+<td style="text-align: left;"><code>GET /zones</code> fournit la liste
+et <code>GET /zones/{zone_type}/{zone_id}</code> le détail</td>
+<td style="text-align: left;">Distinguer liste et détail</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Import de fichiers CSV ou JSON</td>
+<td style="text-align: left;"><code>POST /user/zones/import</code>
+reçoit <code>filename</code> et <code>content</code> dans du JSON</td>
+<td style="text-align: left;">Ne pas présenter un envoi multipart</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Pas quotidiens, mensuels, annuels</td>
+<td style="text-align: left;">Le pas <code>week</code> ISO existe aussi
+; de 1 à 10 stations sont admises</td>
+<td style="text-align: left;">Préciser le quatrième pas et les bornes
+Pydantic</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Estimation sur une période fixe</td>
+<td style="text-align: left;">Intersection avec les dates disponibles ;
+<code>warning</code> en cas de réduction</td>
+<td style="text-align: left;">Lire <code>warning</code> et
+<code>days_with_data</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Nettoyage avec correction saisonnière</td>
+<td style="text-align: left;">Trous courts : linéaire ; 3 à 7 jours :
+hybride ; 8 à 30 jours : régression</td>
+<td style="text-align: left;">Décrire uniquement les méthodes
+actives</td>
+</tr>
+</tbody>
+</table>
+<p>La comparaison est volontairement critique : elle ne dévalorise pas
+l’API. Elle met en évidence des choix d’implémentation défendables, des
+optimisations effectivement réalisées et des ambitions qui restent des
+perspectives. C’est aussi la raison pour laquelle les figures finales
+doivent utiliser les noms de méthodes du code plutôt que des objets
+abstraits isolés.</p>
+<h1 id="stratégie-de-tests-et-couverture-fonctionnelle">23. Stratégie de
+tests et couverture fonctionnelle</h1>
+<p>Le projet sépare ses tests selon trois échelles : objets métier,
+services et routes HTTP. Une quatrième suite teste la préparation des
+données. Ces tests reposent largement sur des données synthétiques et
+des objets factices ; ils vérifient les règles sans exiger en permanence
+l’accès à PostgreSQL ni au réseau météorologique.</p>
+<figure>
+<img src="resources/figures/figure_13.png" style="width:93.0%"
+alt="Répartition des fonctions de test identifiées dans le dépôt." />
+<figcaption aria-hidden="true">Répartition des fonctions de test
+identifiées dans le dépôt.</figcaption>
+</figure>
+<p>L’inventaire du dépôt recense 25 fonctions test_* dans
+test_business_objects.py, 35 dans test_services.py, 31 dans test_api.py
+et 18 dans data/test_data.py : 109 définitions au total. Ce n’est ni un
+nombre de tests réussis ni un pourcentage de couverture. Le fichier
+etat_des_lieux.md rapporte 87 tests réussis au 3 novembre ; c’est un
+constat historique, non une exécution de la version de remise. Des
+fonctions paramétrées peuvent produire davantage de cas lors de
+pytest.</p>
+<h2 id="ce-qui-est-vérifié">Ce qui est vérifié</h2>
+<p>Les assertions portent notamment sur les formules de chauffage et
+climatisation, les semaines ISO, la pondération par population, le
+comportement avec des trous de données, les corrections altimétriques,
+les stations partagées, les erreurs de droits, le cache zonal, les
+formats JSON/CSV et les codes HTTP.</p>
+<p>Les tests d’objets métier isolent des propriétés mathématiques : un
+DJU ne devient pas négatif, les périodes sont correctement bornées et la
+population modifie bien la moyenne territoriale. Les tests de services
+mobilisent des stations et des relevés simulés afin de vérifier l’IDW,
+la correction d’altitude, les dates et le comportement du cache. Les
+tests HTTP s’appuient sur TestClient et sur des services de substitution
+pour contrôler la sérialisation des réponses et les codes de statut sans
+exiger de base opérationnelle.</p>
+<p>Les tests du pipeline couvrent d’autres risques, notamment les
+températures aberrantes, l’absence de jours entiers, les trous courts ou
+longs et la mise en fichier Parquet. Cette complémentarité montre
+l’intérêt d’une stratégie structurée plutôt que d’un unique test de bout
+en bout. Elle n’élimine pas le besoin d’une campagne d’intégration sur
+PostgreSQL alimenté, avec des jeux représentatifs de grands territoires.
+La liste de fonctions observée démontre l’existence de tests ; seule
+leur exécution dans l’environnement cible pourra attester de leur état
+actuel.</p>
+<h1 id="validation-numérique-et-exemples-reproductibles">24. Validation
+numérique et exemples reproductibles</h1>
+<h2 id="exemple-de-dju-journalier">Exemple de DJU journalier</h2>
+<p>Pour un jour fictif où <span class="math inline">\(T_{\min} =
+4\)</span> °C et <span class="math inline">\(T_{\max} = 12\)</span> °C,
+la température moyenne est de 8 °C. Avec un seuil de chauffage de 18 °C,
+le DJU de chauffage vaut <span class="math inline">\(\max(0, 18-8) =
+10\)</span>. Avec un seuil de climatisation de 24 °C, le DJU de
+climatisation vaut <span class="math inline">\(\max(0, 8-24) =
+0\)</span>. Ce résultat ne mesure pas une consommation d’énergie.</p>
+<h2 id="exemple-de-moyenne-territoriale">Exemple de moyenne
+territoriale</h2>
+<p>Deux communes fictives ont respectivement 1 000 et 3 000 habitants,
+et 12 et 8 DJU le même jour. La moyenne pondérée vaut (1 000×12 + 3
+000×8) / 4 000 = 9 DJU. Une moyenne simple aurait donné 10 DJU : la
+population change donc réellement l’indicateur final.</p>
+<h2 id="cas-limites-qui-comptent">Cas limites qui comptent</h2>
+<ul>
+<li><p>Absence totale de stations sur la période : réponse d’erreur, pas
+une série nulle.</p></li>
+<li><p>Une station sans relevé un jour donné : son poids est exclu du
+dénominateur ce jour-là.</p></li>
+<li><p>Borne de période non complète : agrégation sur les dates
+demandées, sans ajouter de jours extérieurs.</p></li>
+<li><p>Seuil absent pour l’un des modes : seul le mode demandé est
+calculé.</p></li>
+<li><p>Une valeur interpolée dans le calcul : observed_ratio diminue en
+conséquence.</p></li>
+</ul>
+<p>Ces calculs illustrent les propriétés vérifiées par les tests
+unitaires. Ils ne doivent pas être confondus avec une mesure de
+performance ou une validation physique sur données historiques
+externes.</p>
+<p>Pour vérifier un calcul sans dépendre de toutes les couches, le
+protocole le plus simple consiste à préparer un petit tableau de
+températures connues, à calculer manuellement les DJU et à confronter
+les résultats à DjuType puis à DjuCalculation. On peut ajouter un jour
+exactement au seuil, un jour de donnée manquante et une période
+traversant deux mois. On obtient ainsi un jeu de tests qui explore les
+discontinuités du maximum, les règles calendaires et l’exclusion des
+valeurs absentes.</p>
+<p>La validation de l’algorithme spatial demande une seconde démarche.
+Un exemple à deux stations permet de calculer à la main les poids
+inverse-distance ; un exemple avec altitude permet d’isoler le terme
+correctif. Un troisième jeu de données retire une observation sur un
+jour pour vérifier la renormalisation des poids. Ces tests sont
+complémentaires d’un contrôle sur des données physiques réelles, par
+exemple comparer la température estimée au relevé d’une station
+volontairement masquée. Cette dernière méthode fournirait une estimation
+empirique de l’erreur d’interpolation, qui n’est pas mesurée dans le
+rapport présent.</p>
+<h1 id="assurance-qualité-risques-preuves-et-priorités">25. Assurance
+qualité : risques, preuves et priorités</h1>
+<p>Une API de données n’est fiable que si ses sources, ses calculs et
+ses réponses le sont. La seule existence de tests ne suffit donc pas :
+il faut préciser la nature de la preuve, les risques encore ouverts et
+les mesures qu’exigerait un environnement de production.</p>
+<h2 id="analyse-des-risques-directement-liés-au-projet">Analyse des
+risques directement liés au projet</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Risque</th>
+<th style="text-align: left;">Conséquence concrète</th>
+<th style="text-align: left;">Prévention ou contrôle</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Source Météo-France inaccessible ou format
+modifié</td>
+<td style="text-align: left;">F0 ne peut plus mettre les relevés à
+jour</td>
+<td style="text-align: left;">Vérification des colonnes, journalisation
+et contrôle des dates chargées</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Relevés manquants, aberrants ou
+montagneux</td>
+<td style="text-align: left;">DJU biaisés et comparaisons
+trompeuses</td>
+<td style="text-align: left;">Traçabilité de provenance,
+<code>days_with_data</code>, <code>observed_ratio</code> et validation
+future</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Premier calcul sur un grand
+territoire</td>
+<td style="text-align: left;">Latence élevée et forte mémoire
+intermédiaire</td>
+<td style="text-align: left;">Vectorisation, chronométrage région/France
+et profil SQL à effectuer</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Changement de zonage après calcul</td>
+<td style="text-align: left;">Résultats de cache obsolètes</td>
+<td style="text-align: left;">Invalidation des calculs lors de la
+modification ou de la suppression</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Dépendance PostgreSQL et secrets JWT</td>
+<td style="text-align: left;">Interruption ou accès non autorisé</td>
+<td style="text-align: left;"><code>.env</code> local, contrôle des
+droits et stratégie de sauvegarde</td>
+</tr>
+</tbody>
+</table>
+<h2 id="protocole-de-validation-avant-dépôt">Protocole de validation
+avant dépôt</h2>
+<p>Depuis la racine du dépôt, sur un commit figé : (1) lancer python -m
+pytest dans api/ et pytest data/test_data.py ; (2) relever les succès,
+erreurs et version Python ; (3) capturer deux appels réels à /dju/point
+et /dju/zone sur une même période disponible ; (4) chronométrer au moins
+un calcul zonal puis le réexécuter pour étudier la relecture du cache ;
+(5) confronter figures, schémas et tables aux fichiers source. Sans ces
+traces, aucun résultat d’exécution ou pourcentage de couverture n’est
+annoncé comme acquis.</p>
+<h1 id="installation-et-exploitation-de-lapi">26. Installation et
+exploitation de l’API</h1>
+<p>Le dépôt fournit des instructions de lancement reproductibles. Il
+requiert Python au moins 3.13, les dépendances décrites par
+api/pyproject.toml et des variables d’environnement de PostgreSQL et de
+signature JWT. Le fichier .env reste local et ne doit contenir aucun
+secret versionné. Les scripts de préparation des données sont lancés
+avant le serveur applicatif.</p>
+<h2 id="procédure-de-bout-en-bout">Procédure de bout en bout</h2>
+<ul>
+<li><p>Créer un environnement virtuel et installer le projet : python -m
+venv .venv puis pip install -e “api[dev]”.</p></li>
+<li><p>Renseigner POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE,
+POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_SCHEMA et JWT_SECRET dans
+.env.</p></li>
+<li><p>Exécuter successivement data/meteo.py, data/qualite_meteo.py,
+data/communes.py puis data/init_db.py.</p></li>
+<li><p>Lancer l’API depuis api/src avec python main.py, puis consulter
+/docs et /health.</p></li>
+<li><p>Lancer pytest depuis api/ et tester les scripts de données avec
+pytest data/test_data.py.</p></li>
+</ul>
+<p>La documentation interactive Swagger fournie par FastAPI permet de
+vérifier les champs disponibles et d’envoyer des requêtes. Dans la
+configuration du dépôt, le port Uvicorn par défaut est 5001, modifiable
+via l’environnement.</p>
+<h2 id="précautions-de-fonctionnement">Précautions de
+fonctionnement</h2>
+<p>Le premier chargement peut être long compte tenu du volume brut. Les
+tests HTTP n’exigent pas de connexion à la base ; en revanche, une
+démonstration complète des calculs réels nécessite des tables PostgreSQL
+alimentées. Le journal du 5 novembre signale des ajustements de
+reconnexion automatique au serveur distant.</p>
+<p>Le fichier .env fournit les informations de connexion SQL, le nom du
+schéma, le secret de signature JWT et le port du serveur. La
+confidentialité de ce fichier est essentielle : un mot de passe
+PostgreSQL ou une clé JWT publiés dans le dépôt compromettraient le
+contrôle des accès. Les variables doivent être différentes entre
+environnement local, démonstration et déploiement. La documentation de
+lancement indique l’ordre des scripts et permet à un tiers de reproduire
+la chaîne, sous réserve de disposer des autorisations et des volumes de
+stockage nécessaires.</p>
+<p>L’outil Swagger documente automatiquement les champs de requête et
+les structures de réponse, mais une procédure d’exploitation doit aussi
+décrire les prérequis de données. La présence des tables ne suffit pas
+si elles sont vides ; il faut vérifier la couverture temporelle, la
+liste des stations et les territoires effectivement chargés. Pour
+diagnostiquer une démonstration, on peut vérifier successivement
+/health, la liste des zones, puis une requête ponctuelle courte sur une
+période connue. Cette démarche localise plus facilement un problème de
+démarrage, de connexion, de référentiel ou de relevés.</p>
+<h1 id="limites-perspectives-et-conclusion">27. Limites, perspectives et
+conclusion</h1>
+<h2 id="limites-reconnues">Limites reconnues</h2>
+<p>Les performances sur un calcul national et sur une région complète
+restent à mesurer ; elles ne doivent pas être déduites de la seule
+vectorisation. La distance géographique et un gradient altimétrique
+constant ne suffisent pas à reproduire tous les microclimats. Le
+traitement des séries incomplètes limite les valeurs artificielles, sans
+garantir une estimation exacte. Enfin, le cache de températures
+communales envisagé dans le dossier intermédiaire n’est pas intégré au
+flux actuel, et F1 reste non persisté.</p>
+<h2 id="améliorations-raisonnables">Améliorations raisonnables</h2>
+<ul>
+<li><p>Mesurer temps de réponse, consommation mémoire et nombre de
+requêtes SQL pour une région et pour la France.</p></li>
+<li><p>Tester un indicateur de couverture de données plus complet et
+documenter les effets du comblement sur les résultats.</p></li>
+<li><p>Raccorder ou supprimer la DAO de cache communal afin d’éviter une
+documentation ambiguë.</p></li>
+<li><p>Ajouter la recherche des communes par nom et l’ajout groupé de
+départements/régions aux zonages.</p></li>
+<li><p>Mettre à jour les diagrammes en fonction de l’implémentation
+stabilisée, puis lancer la suite de tests avant le dépôt.</p></li>
+</ul>
+<h2 id="conclusion">Conclusion</h2>
+<p>En trois mois, l’équipe est passée d’une formule de DJU et d’archives
+météorologiques à une API multi-couches capable d’interroger des points
+et des territoires, de gérer des zones privées et de restituer des
+résultats traçables. Le gain principal réside dans la chaîne complète :
+préparation des données, interpolation, calcul, contrôles, persistance
+et tests. Le travail restant relève désormais surtout de la mesure, de
+la clarification documentaire et de la consolidation de certains
+mécanismes de cache.</p>
+<p>Le projet a montré que la complexité d’une API scientifique se situe
+moins dans la formule finale que dans ses conditions d’application. Les
+données météorologiques sont hétérogènes ; les zones comportent des
+milliers d’unités ; les paramètres changent le sens du résultat ; les
+utilisateurs doivent être isolés ; enfin la performance dépend de la
+réutilisation des calculs. La version finale est donc jugée autant sur
+la cohérence de ces interfaces que sur l’existence de chaque route.</p>
+<p>Avant la remise définitive, un protocole de clôture devrait réunir
+cinq vérifications : exécuter la suite de tests sur la version figée ;
+tester les routes principales contre la base représentative ;
+chronométrer au moins un calcul territorial long ; rapprocher les
+schémas des signatures et tables courantes ; relire les remarques
+annotées du professeur. Ces contrôles ne supposent pas de nouveaux
+modules métier, mais ils conditionnent la fiabilité des conclusions. Ils
+constituent des prolongements réalistes d’un projet dont les
+fonctionnalités principales sont déjà implémentées.</p>
+<h1 id="annexe-a-sources-conventions-et-vérifications">Annexe A :
+Sources, conventions et vérifications</h1>
+<h2 id="sources-de-référence">Sources de référence</h2>
+<ul>
+<li><p>[S1] Sujet DJU fourni dans « présentation DJU.docx.pdf »
+(contexte, calculs, qualité et références de données).</p></li>
+<li><p>[S2] Dépôt GitHub équipe 12 :
+github.com/gabriel-dahan/ensai-it-project-2a-team12 (main, consulté le
+15 novembre 2026).</p></li>
+<li><p>[S3] README.md, api/README.md, api/src/, data/ et
+data/init_db.sql du dépôt.</p></li>
+<li><p>[S4] Rapports de suivi doc/tracking/2026.11.05-week9.md et
+2026.11.12-week10.md.</p></li>
+<li><p>[S5] Rapport intermédiaire « rapport_analyse_équipe_12_annoté.pdf
+», annotations de Thierry Mathé (septembre 2026). Consigne officielle :
+ludo2ne.github.io/ENSAI-2A-Projet-info/doc/french/projet/notice-eleves.html.</p></li>
+<li><p>[S6] Rapports modèles fournis par l’enseignant : Vélib’ Hunter
+(équipe 29, 2023) et Cinégram (équipe 31, 2024–2025), consultés pour la
+structure et la présentation des démonstrations.</p></li>
+</ul>
+<h2 id="petit-glossaire">Petit glossaire</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Terme</th>
+<th style="text-align: left;">Définition</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">DJU</td>
+<td style="text-align: left;">Écart thermique journalier non négatif,
+cumulé dans le temps</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">IDW</td>
+<td style="text-align: left;">Pondération inverse de la distance
+(<em>Inverse Distance Weighting</em>)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DAO</td>
+<td style="text-align: left;">Couche de lecture et écriture des données
+(<em>Data Access Object</em>)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">JWT</td>
+<td style="text-align: left;">Jeton signé pour authentifier les
+utilisateurs</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Parquet</td>
+<td style="text-align: left;">Format de stockage tabulaire
+colonnaire</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Observé</td>
+<td style="text-align: left;">Valeur issue de données non estimées ou
+interpolées</td>
+</tr>
+</tbody>
+</table>
+<h2 id="contrôles-à-effectuer-avant-le-dépôt">Contrôles à effectuer
+avant le dépôt</h2>
+<h1 id="annexe-b.1-note-individuelle-aziz-yousfi">Annexe B.1 : Note
+individuelle : Aziz Yousfi</h1>
+<p>Proposition de rédaction personnelle fondée sur les journaux du
+projet : à relire, compléter et valider par son auteur avant remise.</p>
+<h2 id="contributions-dont-je-peux-rendre-compte">Contributions dont je
+peux rendre compte</h2>
+<p>Le suivi de projet me rattache aux premières recherches de sources, à
+la modélisation, puis à la mise en place des objets métier. Lors de la
+phase d’intégration, j’ai refondu le calcul dans DjuCalculation : run()
+reçoit une série quotidienne estimée et run_for_zone() construit des DJU
+agrégés par population. J’ai également contribué aux tests des objets
+métier.</p>
+<h2 id="difficulté-technique-et-prise-de-recul-à-approfondir">Difficulté
+technique et prise de recul à approfondir</h2>
+<p>La cohérence mathématique entre calcul unitaire, agrégation
+temporelle et agrégation territoriale constitue un point sensible. Le
+choix de pondérer par les habitants plutôt que de faire une moyenne
+simple modifie réellement le résultat ; les cas de communes sans
+population ou de journées incomplètes doivent donc être explicitement
+définis et testés.</p>
+<h2 id="éléments-personnels-restant-à-valider">Éléments personnels
+restant à valider</h2>
+<p>À confirmer personnellement : un exemple de coordination avec la
+partie météo / DAO, une difficulté précise résolue pendant les tests, un
+choix que je ferais différemment.</p>
+<h1 id="annexe-b.2-note-individuelle-eudes-sterlin">Annexe B.2 : Note
+individuelle : Eudes Sterlin</h1>
+<p>Proposition de rédaction personnelle fondée sur les journaux du
+projet : à relire, compléter et valider par son auteur avant remise.</p>
+<h2 id="contributions-dont-je-peux-rendre-compte-1">Contributions dont
+je peux rendre compte</h2>
+<p>Les suivis indiquent que j’ai participé à la mise en place du point
+d’entrée de l’API et des premières routes au démarrage, puis au
+développement de dju_dao.py et à l’évolution de init_db.sql. En
+novembre, j’ai révisé le schéma SQL, actualisé des diagrammes et
+consigné un état des écarts entre la conception et l’implémentation dans
+etat_des_lieux.md.</p>
+<h2
+id="difficulté-technique-et-prise-de-recul-à-approfondir-1">Difficulté
+technique et prise de recul à approfondir</h2>
+<p>Le principal enjeu technique de ce périmètre est de synchroniser la
+structure des tables, les requêtes DAO et le moteur de calcul. Une
+colonne absente ou un schéma de réponse obsolète peut rendre inopérante
+une fonctionnalité pourtant présente dans le code. Le contrôle de ces
+interfaces et la traçabilité des corrections ont donc une portée
+fonctionnelle et pas seulement documentaire.</p>
+<h2 id="éléments-personnels-restant-à-valider-1">Éléments personnels
+restant à valider</h2>
+<p>À confirmer personnellement : un problème SQL ou de coordination
+réellement rencontré, la façon dont l’équipe l’a résolu et mon
+apprentissage le plus important.</p>
+<h1 id="annexe-b.3-note-individuelle-gabriel-dahan">Annexe B.3 : Note
+individuelle : Gabriel Dahan</h1>
+<p>Proposition de rédaction personnelle fondée sur les journaux du
+projet : à relire, compléter et valider par son auteur avant remise.</p>
+<h2 id="contributions-dont-je-peux-rendre-compte-2">Contributions dont
+je peux rendre compte</h2>
+<p>Les comptes rendus me rattachent à la structure du dépôt, à
+l’environnement Python et à la documentation initiale. En octobre, j’ai
+traité des blocages de démarrage et homogénéisé les réponses d’erreur.
+En novembre, j’ai contribué à la mise en œuvre des routes et services
+pour les DJU ponctuels et zonaux, les zones officielles et
+personnalisées, les comptes et l’import, ainsi qu’au cache zonal et à
+l’export CSV.</p>
+<h2
+id="difficulté-technique-et-prise-de-recul-à-approfondir-2">Difficulté
+technique et prise de recul à approfondir</h2>
+<p>L’intégration des parcours HTTP met en évidence la nécessité de
+séparer trois responsabilités : validation des requêtes, orchestration
+métier et persistance. Une route correctement définie ne suffit pas si
+les services attendent d’autres noms de champs ou si les DAO ne
+retrouvent pas les tables alimentées. Les contrôles 401/403/404/422 et
+les tests de contrôleur sont particulièrement utiles pour limiter ces
+défauts.</p>
+<h2 id="éléments-personnels-restant-à-valider-2">Éléments personnels
+restant à valider</h2>
+<p>À confirmer personnellement : l’incident d’intégration le plus
+marquant, la coopération entre modules et une amélioration réaliste du
+processus.</p>
+<h1 id="annexe-b.4-note-individuelle-gwenaël-lassalle">Annexe B.4 : Note
+individuelle : Gwenaël Lassalle</h1>
+<p>Proposition de rédaction personnelle fondée sur les journaux du
+projet : à relire, compléter et valider par son auteur avant remise.</p>
+<h2 id="contributions-dont-je-peux-rendre-compte-3">Contributions dont
+je peux rendre compte</h2>
+<p>Les comptes rendus mentionnent des recherches sur les sources de
+données et le référentiel communal, la rédaction de l’introduction et de
+parties du dossier d’analyse, puis l’actualisation des figures. Le suivi
+du 5 novembre m’attribue aussi la reprise du rapport final et de sa mise
+en page, ainsi que le chargement dans PostgreSQL distant d’environ 4 555
+stations et 32 millions de relevés.</p>
+<h2
+id="difficulté-technique-et-prise-de-recul-à-approfondir-3">Difficulté
+technique et prise de recul à approfondir</h2>
+<p>Ce rôle relie un enjeu d’exploitation à un enjeu de restitution : des
+sources volumineuses doivent être réellement chargées avant les tests
+métier, et les schémas doivent représenter les transformations
+observables plutôt que seulement les intentions initiales. Une
+difficulté à analyser est la gestion des connexions à PostgreSQL lorsque
+le serveur distant clôt une session.</p>
+<h2 id="éléments-personnels-restant-à-valider-3">Éléments personnels
+restant à valider</h2>
+<p>À confirmer personnellement : les difficultés exactes du chargement
+distant, le retour d’expérience sur la rédaction et une leçon de
+collaboration.</p>
+<h1 id="annexe-b.5-note-individuelle-marceau-feral">Annexe B.5 : Note
+individuelle : Marceau Feral</h1>
+<p>Proposition de rédaction personnelle fondée sur les journaux du
+projet : à relire, compléter et valider par son auteur avant remise.</p>
+<h2 id="contributions-dont-je-peux-rendre-compte-4">Contributions dont
+je peux rendre compte</h2>
+<p>Le suivi me rattache à la constitution et au nettoyage des données
+météorologiques, à la gestion des valeurs manquantes, aux scripts de
+chargement et à la couche DAO initiale. Au début de novembre, j’ai
+travaillé à la chaîne meteo.py, qualite_meteo.py, communes.py puis
+init_db.py et à la vectorisation de l’estimation des températures et des
+calculs sur les communes avec NumPy et Pandas.</p>
+<h2
+id="difficulté-technique-et-prise-de-recul-à-approfondir-4">Difficulté
+technique et prise de recul à approfondir</h2>
+<p>Les lacunes de température constituent une difficulté scientifique
+autant que logicielle. Le choix du comblement dépend de la durée du trou
+et de la disponibilité de stations voisines ; les données estimées
+doivent conserver leur provenance pour ne pas être présentées comme des
+mesures brutes. Pour les calculs territoriaux, la vectorisation évite de
+répliquer inutilement les mêmes lectures de relevés.</p>
+<h2 id="éléments-personnels-restant-à-valider-4">Éléments personnels
+restant à valider</h2>
+<p>À confirmer personnellement : un cas réel de donnée aberrante
+difficile à traiter, une difficulté de performance rencontrée et une
+méthode de travail à reprendre.</p>
+</body>
+</html>
