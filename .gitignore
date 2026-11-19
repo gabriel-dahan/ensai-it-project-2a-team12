@@ -14,3 +14,6 @@ __pycache__
 
 # Fichiers Parquet générés par les scripts de data/ (plusieurs Go)
 data/raw_data/
+
+# Anciennes versions du rapport final (backup local uniquement)
+doc/reports/final_report/final_report_old*
