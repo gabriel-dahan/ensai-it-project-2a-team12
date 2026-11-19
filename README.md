@@ -57,7 +57,7 @@ The project is based on the ENSAI second-year computer science project template.
 The application follows a layered architecture:
 
 - business_object : dju.py, geo_zone.py, meteo_station.py, temperature_report.py, user.py
-- dao : db_connection.py, dju_dao.py, geo_zone_dao.py, meteo_station_dao.py, municipality_temperature_dao.py, temperature_report_dao.py, user_dao.py, zoning_dao.py
+- dao : db_connection.py, dju_dao.py, geo_zone_dao.py, meteo_station_dao.py, temperature_report_dao.py, user_dao.py, zoning_dao.py
 - service : auth_service.py, dju_service.py, errors.py, temperature_service.py, zone_service.py
 - controllers and schema : the API routes and the request / response formats
 

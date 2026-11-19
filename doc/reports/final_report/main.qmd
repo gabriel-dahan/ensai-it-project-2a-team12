@@ -8,8 +8,9 @@ format:
     documentclass: report
     pdf-engine: xelatex
     latex-auto-install: false
-    mermaid-format: png
     header-includes: |
+      \AtBeginDocument{\hypersetup{pdftitle={Rapport final : API de calcul de DJU}, pdfauthor={Groupe 12 : Aziz Yousfi, Eudes Sterlin, Gabriel Dahan, Gwenaël Lassalle, Marceau Feral}}}
+
       \usepackage{enumitem}
       \setlist[itemize]{label=$\bullet$}
       \usepackage[bottom]{footmisc}
@@ -67,6 +68,7 @@ fontsize: 10pt
 papersize: a4
 geometry: top=1.5cm, bottom=1.5cm, left=1.5cm, right=1.5cm
 
+bibliography: references.bib
 link-citations: true
 colorlinks: true
 linkcolor: black
@@ -74,12 +76,9 @@ urlcolor: pale-blue
 citecolor: pale-blue
 editor: visual
 
-execute:
-  freeze: auto
-
-echo: FALSE
-warning: FALSE
-message: FALSE
+crossref:
+  sec-prefix: section
+  fig-prefix: figure
 ---
 
 <!-- Partie document -->
@@ -142,7 +141,7 @@ ENSAI\\
 
 Dans les secteurs résidentiel et tertiaire, les consommations d'énergie dépendent beaucoup de la météo : on chauffe davantage quand il fait froid, et on climatise davantage quand il fait chaud. Ainsi, lorsque l'on compare les consommations d'une année sur l'autre, il n'est pas toujours facile de savoir si une baisse vient d'une amélioration réelle (travaux, changements d'habitudes) ou simplement d'un hiver plus doux.
 
-Pour tenir compte de cet effet, on utilise un indicateur appelé *Degré Jour Unifié (DJU)*. Jour après jour, on mesure l'écart entre la température extérieure et un *seuil* de confort thermique. Ce seuil est une température de référence fournie par l'utilisateur dans sa requête (par exemple $18$ °C pour le chauffage, ou un seuil distinct pour la climatisation). Il correspond à la température au-dessus de laquelle on ne chauffe plus (ou en dessous de laquelle on ne climatise plus) ; la littérature retient des valeurs de 15 à 18 °C pour le chauffage. Plus le climat est rigoureux par rapport à ce seuil, plus les DJU sont élevés. Cela permet ensuite de comparer des consommations en corrigeant, au moins en partie, l'influence de la météo.
+Pour tenir compte de cet effet, on utilise un indicateur appelé *Degré Jour Unifié (DJU)*. Jour après jour, on mesure l'écart entre la température extérieure et un *seuil* de confort thermique. Ce seuil est une température de référence fournie par l'utilisateur dans sa requête (par exemple $18$ °C pour le chauffage, ou un seuil distinct pour la climatisation). Il correspond à la température au-dessus de laquelle on ne chauffe plus (ou en dessous de laquelle on ne climatise plus) ; la littérature retient des valeurs de 15 à 18 °C pour le chauffage, et le Sdes publie par exemple des DJU calculés avec des seuils de 15 et 17 °C [@sdes_dju]. Plus le climat est rigoureux par rapport à ce seuil, plus les DJU sont élevés. Cela permet ensuite de comparer des consommations en corrigeant, au moins en partie, l'influence de la météo.
 
 En pratique, on calcule d'abord la température moyenne quotidienne $T_m = (T_{\min} + T_{\max}) / 2$. Pour un seuil de chauffage $S_c$ et un seuil de climatisation $S_f$, le DJU journalier s'écrit :
 
@@ -162,43 +161,43 @@ Dans un premier temps, nous rappelons le cahier des charges, structuré par fonc
 
 Cette partie formalise le périmètre, les acteurs, les fonctionnalités, les choix réalisés et l'organisation du travail.
 
-## Acteurs et concepts de base
+## Acteurs et concepts de base {#sec-acteurs}
 
 Trois profils interagissent avec le système.
 
-L'*utilisateur anonyme* calcule des DJU et consulte les zonages officiels sans compte.
+ - L'*utilisateur anonyme* calcule des DJU et consulte les zonages officiels sans compte.
 
-L'*utilisateur authentifié* dispose des mêmes droits et peut en plus créer, modifier, supprimer ou importer des zonages personnalisés, puis lancer des calculs dessus.
+ - L'*utilisateur authentifié* dispose des mêmes droits et peut en plus créer, modifier, supprimer ou importer des zonages personnalisés, puis lancer des calculs dessus.
 
-L'*Administrateur* n'utilise pas l'API métier : il exécute, une seule fois et en dehors de l'API, les scripts qui téléchargent, nettoient et chargent les données sources dans la base (F0).
+ - L'*Administrateur* n'utilise pas l'API métier : il exécute, une seule fois et en dehors de l'API, les scripts qui téléchargent, nettoient et chargent les données sources dans la base (F0).
 
-Un *zonage* désigne un ensemble de communes. On distingue les zonages officiels (départements, régions), publics pour tous, et les zonages personnalisés, propres à un utilisateur authentifié.
+ - Un *zonage* désigne un ensemble de communes. On distingue les zonages officiels (départements, régions), publics pour tous, et les zonages personnalisés, propres à un utilisateur authentifié.
 
-Le *seuil* de calcul est toujours fourni dans la requête. Si l'utilisateur ne fournit qu'un seuil de climatisation, seuls les DJU de climatisation sont calculés. S'il ne fournit qu'un seuil de chauffage, seuls les DJU de chauffage sont calculés. Les deux seuils peuvent être demandés simultanément ; les températures ne sont alors estimées qu'une seule fois.
+ - Le *seuil* de calcul est toujours fourni dans la requête. Si l'utilisateur ne fournit qu'un seuil de climatisation, seuls les DJU de climatisation sont calculés. S'il ne fournit qu'un seuil de chauffage, seuls les DJU de chauffage sont calculés. Les deux seuils peuvent être demandés simultanément ; les températures ne sont alors estimées qu'une seule fois.
 
 ## Fonctionnalités de base
 
 Deux notions de période coexistent : la période des données disponibles (relevés Météo-France conservés à partir du 1er janvier 1990) et la période de calcul demandée par l'utilisateur (intervalle `[start_date, end_date]` de la requête, avec un pas d'agrégation quotidien, hebdomadaire, mensuel ou annuel).
 
-**F0 — Initialisation des bases.** L'Administrateur lance quatre scripts du dossier `data/`. Ils téléchargent les relevés quotidiens des stations Météo-France et le référentiel des communes (geo.api.gouv.fr, altitudes de l'IGN), traitent les valeurs manquantes, puis remplissent la base PostgreSQL.
+**F0 : Initialisation des bases.** L'Administrateur lance quatre scripts du dossier `data/`. Ils téléchargent les relevés quotidiens des stations Météo-France [@meteofrance_quot] et le référentiel des communes (geo.api.gouv.fr [@geo_api], altitudes de l'IGN [@ign_alti]), traitent les valeurs manquantes, puis remplissent la base PostgreSQL.
 
-**F1 — Calcul d'un DJU ponctuel.** À partir de coordonnées GPS (latitude, longitude, altitude facultative), le système estime la température locale puis calcule les DJU sur la période et le pas de temps demandés. Exemple : DJU mensuels du 1er janvier 2010 au 31 décembre 2025.
+**F1 : Calcul d'un DJU ponctuel.** À partir de coordonnées GPS (latitude, longitude, altitude facultative), le système estime la température locale puis calcule les DJU sur la période et le pas de temps demandés. Exemple : DJU mensuels du 1er janvier 2010 au 31 décembre 2025.
 
-**F2 — Consultation des zonages officiels.** Tout client peut lister les départements et les régions, puis obtenir le détail d'une zone avec la liste de ses communes.
+**F2 : Consultation des zonages officiels.** Tout client peut lister les départements et les régions, puis obtenir le détail d'une zone avec la liste de ses communes.
 
-**F3 — Calcul d'un DJU sur un territoire.** Le calcul porte sur une région, un département ou un zonage personnalisé. Les DJU communaux sont agrégés par une moyenne pondérée par la population. Un niveau d'agrégation permet d'obtenir un résultat pour la zone entière, pour chacun de ses départements ou pour chacune de ses communes. Exemple : DJU annuels de chaque département d'Île-de-France entre 2015 et 2024.
+**F3 : Calcul d'un DJU sur un territoire.** Le calcul porte sur une région, un département ou un zonage personnalisé. Les DJU communaux sont agrégés par une moyenne pondérée par la population. Un niveau d'agrégation permet d'obtenir un résultat pour la zone entière, pour chacun de ses départements ou pour chacune de ses communes. Exemple : DJU annuels de chaque département d'Île-de-France entre 2015 et 2024.
 
-**F4 — Zonages personnalisés.** Un utilisateur authentifié crée et conserve ses propres zonages à partir de codes INSEE, peut les modifier ou les supprimer, et lance des calculs DJU dessus.
+**F4 : Zonages personnalisés.** Un utilisateur authentifié crée et conserve ses propres zonages à partir de codes INSEE, peut les modifier ou les supprimer, et lance des calculs DJU dessus.
 
 ## Fonctionnalités optionnelles
 
 Les trois fonctionnalités optionnelles ont été développées, dans l'ordre de priorité annoncé dans le dossier d'analyse.
 
-**FO1 — Conservation des résultats** (priorité haute). Les calculs sur un territoire sont enregistrés avec tous leurs paramètres : une requête identique est servie directement depuis la base. Les calculs ponctuels ne sont pas conservés (voir section 1.4.4).
+**FO1 : Conservation des résultats** (priorité haute). Les calculs sur un territoire sont enregistrés avec tous leurs paramètres : une requête identique est servie directement depuis la base. Les calculs ponctuels ne sont pas conservés (voir @sec-cache).
 
-**FO3 — Import de zonages** (priorité moyenne). Un zonage peut être créé à partir du contenu d'un fichier CSV ou JSON contenant des codes INSEE.
+**FO3 : Import de zonages** (priorité moyenne). Un zonage peut être créé à partir du contenu d'un fichier CSV ou JSON contenant des codes INSEE.
 
-**FO2 — Mise en forme des résultats** (priorité basse). Les routes de calcul renvoient du JSON par défaut et un fichier CSV si l'on ajoute le paramètre `format=csv`.
+**FO2 : Mise en forme des résultats** (priorité basse). Les routes de calcul renvoient du JSON par défaut et un fichier CSV si l'on ajoute le paramètre `format=csv`.
 
 ## Questionnement et choix
 
@@ -218,7 +217,7 @@ Ce changement a trois raisons. D'abord, il donne une seule source de données pe
 
 ### Interpolation spatiale et altitude
 
-Il est rare d'avoir une station exactement sur le point demandé. Les distances sont calculées par la formule d'Haversine ; les températures sont estimées par pondération inverse du carré de la distance (IDW) entre les $n$ stations les plus proches :
+Il est rare d'avoir une station exactement sur le point demandé. Les distances sont calculées par la formule d'Haversine [@sinnott1984] ; les températures sont estimées par pondération inverse du carré de la distance (IDW) [@shepard1968] entre les $n$ stations les plus proches :
 
 $$
 \hat{T}(x) = \frac{\sum_{i} w_i\, T_i}{\sum_{i} w_i},
@@ -227,15 +226,15 @@ $$
 
 Le nombre $n$ de stations est un paramètre facultatif de la requête (entre 1 et 10, 3 par défaut). Seules les stations qui ont des relevés sur la période sont retenues. Un jour donné, la moyenne n'est faite que sur les stations qui ont une valeur ce jour-là.
 
-L'altitude cible est facultative. Si elle est absente, aucune correction n'est appliquée. Si elle est fournie, chaque température de station est corrigée de $-0{,}65$ °C par 100 m d'écart entre le lieu et la station. Pour une commune, on utilise les coordonnées et l'altitude de la mairie plutôt que du centre géométrique, car la mairie est plus proche de l'endroit où vivent les habitants (à Chamonix, 1 036 m à la mairie contre 1 885 m au centre de la commune).
+L'altitude cible est facultative. Si elle est absente, aucune correction n'est appliquée. Si elle est fournie, chaque température de station est corrigée de $-0{,}65$ °C par 100 m d'écart entre le lieu et la station, gradient vertical de l'atmosphère type [@oaci_atmosphere]. Pour une commune, on utilise les coordonnées et l'altitude de la mairie plutôt que du centre géométrique, car la mairie est plus proche de l'endroit où vivent les habitants (à Chamonix, 1 036 m à la mairie contre 1 885 m au centre de la commune).
 
-### Cache et réutilisation
+### Cache et réutilisation {#sec-cache}
 
 Le dossier d'analyse prévoyait deux niveaux de cache : les températures quotidiennes estimées de chaque commune, puis les résultats finaux. Nous n'avons gardé que le second.
 
 Les résultats finaux d'un calcul sur un territoire sont enregistrés dans les tables `dju_calculations` et `dju_results`. Un calcul est identifié par l'ensemble de ses paramètres : zone, type de DJU (mode et seuil), période, pas de temps, nombre de stations et prise en compte de l'altitude. Si un seul paramètre manquait dans cette clé, deux demandes différentes pourraient recevoir le même résultat. Lorsqu'un zonage personnalisé est modifié ou supprimé, ses calculs stockés sont supprimés, car ils ne correspondent plus à son contenu.
 
-Le cache des températures communales a été abandonné. Une table remplie à l'avance aurait représenté des centaines de millions de lignes (près de 35 000 communes sur plus de trente ans). Surtout, après la vectorisation de l'estimation (section 3.1), estimer les températures de toutes les communes d'une région ne demande plus qu'une requête par groupe de stations et quelques opérations matricielles : relire un cache n'apportait plus de gain suffisant pour justifier sa complexité. La classe `MunicipalityTemperatureDao`, écrite pour ce cache, est restée dans le code mais n'est plus utilisée.
+Le cache des températures communales a été abandonné. Une table remplie à l'avance aurait représenté des centaines de millions de lignes (près de 35 000 communes sur plus de trente ans). Surtout, après la vectorisation de l'estimation (@sec-vectorisation), estimer les températures de toutes les communes d'une région ne demande plus qu'une requête par groupe de stations et quelques opérations matricielles : relire un cache n'apportait plus de gain suffisant pour justifier sa complexité (@sec-perf). La DAO écrite pour ce cache a été retirée du code.
 
 Les calculs ponctuels (F1) ne sont pas stockés : deux utilisateurs donnent très rarement les mêmes coordonnées, et ces résultats ne seraient presque jamais réutilisés. Les DJU journaliers ne sont pas stockés non plus, car ils dépendent du seuil, qui est libre, et se recalculent par une simple soustraction.
 
@@ -243,7 +242,7 @@ Les calculs ponctuels (F1) ne sont pas stockés : deux utilisateurs donnent trè
 
 Une requête peut demander une période qui dépasse les données chargées (par exemple à partir de 1980). Plutôt que de refuser la requête, le service ramène la période aux dates disponibles et la réponse contient un champ `warning` qui le signale. Si la période demandée ne recoupe aucune donnée, une erreur 400 est renvoyée avec les dates disponibles. Chaque résultat indique en outre le nombre de jours réellement calculés (`days_with_data`), pour que l'utilisateur sache si une période est incomplète.
 
-## Gestion des données manquantes
+## Gestion des données manquantes {#sec-manquantes}
 
 Les fichiers Météo-France bruts comportent des périodes sans données. Le traitement est fait une seule fois, par le script `qualite_meteo.py` de F0, avant le chargement en base : l'API ne voit que des séries déjà complétées. L'ordre est le suivant : nettoyage, comblement, contrôle, persistance.
 
@@ -270,7 +269,7 @@ La coordination s'est appuyée sur un dépôt GitHub commun. Un suivi hebdomadai
 
 Le projet s'est déroulé en trois phases. La première (septembre) a porté sur l'analyse du sujet, la recherche des sources de données et le dossier d'analyse. La deuxième (fin septembre à mi-octobre) a consisté à reprendre la modélisation à partir des remarques du tuteur : tous les diagrammes ont été réécrits en français, avec les mêmes noms que dans le code, puis un état des lieux a comparé le code à ces diagrammes et listé les écarts à corriger. La troisième (fin octobre à novembre) a été consacrée au développement des services et des routes, au chargement de la France entière en base, aux tests et au rapport final. Le diagramme ci-dessous a été reconstitué à partir du suivi hebdomadaire.
 
-![Planning réalisé](resources/diagrams_final/fig-gantt.png){#fig-gantt width=97% fig-pos="H"}
+![Planning réalisé](resources/diagrams_final/fig-gantt.png){#fig-gantt width="97%" fig-pos="H"}
 
 La répartition s'est faite par domaine, chacun restant responsable des tests de son code.
 
@@ -280,7 +279,7 @@ La répartition s'est faite par domaine, chacun restant responsable des tests de
 - **Gwenaël Lassalle** : recherche des sources de données, import des communes, introduction et spécifications du dossier d'analyse, diagrammes, chargement de la France entière dans PostgreSQL et reconnexion automatique de l'API, rapport final.
 - **Marceau Feral** : chaîne de données (`meteo.py`, `qualite_meteo.py`, `communes.py`, `init_db.py`) et ses tests, traitement des valeurs manquantes, vectorisation de l'estimation des températures, réécriture des diagrammes.
 
-Un assistant d'IA (Claude Code) a été utilisé ponctuellement, notamment pour comparer le code aux diagrammes lors de l'état des lieux ; chaque proposition a été relue et testée par l'équipe.
+Un assistant d'IA (Claude Code) a été utilisé comme outil d'appoint, dans trois situations. D'abord, pour diagnostiquer des erreurs sur lesquelles nous bloquions : problèmes d'environnement Python, messages d'erreur de FastAPI ou de psycopg2, requêtes SQL qui ne renvoyaient pas le résultat attendu. Ensuite, pour obtenir des exemples de code sur des points précis que nous ne maîtrisions pas encore, comme la commande `COPY` de PostgreSQL appelée depuis Python, le pivot de tableaux pandas ou les dépendances FastAPI pour l'authentification. Enfin, pour comparer le code aux diagrammes lors de l'état des lieux. Ces exemples ont servi de point de départ : ils ont été adaptés à notre modèle de données, relus et testés par l'équipe. La conception (architecture, modèle de données, choix des méthodes de calcul et de comblement) reste celle de l'équipe.
 
 # Conception de l'API
 
@@ -290,15 +289,17 @@ Cette partie décrit l'architecture et, pour chaque fonctionnalité, les traitem
 
 L'application suit une architecture en couches. La couche de présentation expose l'API REST avec FastAPI : chaque route est prise en charge par un contrôleur (`dju_controller`, `zone_controller`, `user_controller`), qui valide la requête grâce aux schémas Pydantic puis délègue au service correspondant. La couche de services (`DjuService`, `TemperatureService`, `ZoneService`, `AuthService`) orchestre le métier. Les objets métier (`DjuCalculation`, `GeographicZone`, `Zoning`, etc.) portent les règles de calcul. La couche DAO est la seule à accéder à PostgreSQL. Les scripts de préparation des données sont séparés de l'API.
 
-![Architecture en couches](resources/diagrams_final/fig-architecture.png){#fig-architecture width=90% fig-pos="H"}
+![Architecture en couches](resources/diagrams_final/fig-architecture.png){#fig-architecture width="90%" fig-pos="H"}
 
-Cette séparation a deux avantages. Les objets métier n'accèdent jamais à la base : ils ne font que des calculs sur leurs propres données, et peuvent être testés sans base. Les services reçoivent leurs DAO en paramètre du constructeur, ce qui permet de les remplacer par de faux objets dans les tests (section 3.2).
+Cette séparation a deux avantages. Les objets métier n'accèdent jamais à la base : ils ne font que des calculs sur leurs propres données, et peuvent être testés sans base. Les services reçoivent leurs DAO en paramètre du constructeur, ce qui permet de les remplacer par de faux objets dans les tests (@sec-tests).
 
 ## Modèle de données
 
-Le schéma relationnel (`data/init_db.sql`) reprend les entités du domaine. Il se divise en trois groupes : le territoire et les zonages, les données météo, et le cache des calculs.
+Le schéma relationnel (`data/init_db.sql`) reprend les entités du domaine. Il se divise en quatre groupes : les utilisateurs, le territoire et les zonages, les données météo, et le cache des calculs.
 
-![Modèle physique des données](resources/diagrams_final/fig-mpd.png){#fig-mpd width=97% fig-pos="H"}
+![Modèle physique des données](resources/diagrams_final/fig-mpd.png){#fig-mpd width="97%" fig-pos="H"}
+
+**Utilisateurs.** La table `users` contient le nom d'utilisateur, déclaré unique, et le mot de passe haché par bcrypt : le mot de passe en clair n'est jamais stocké. La contrainte d'unicité protège contre deux inscriptions simultanées sous le même nom, que le service traduit en erreur 409. Chaque zonage personnalisé désigne son propriétaire par la clé étrangère `user_id`, avec l'option `ON DELETE CASCADE` : la suppression d'un compte supprime ses zonages.
 
 **Territoire et zonages.** Les tables `regions`, `departments` et `municipalities` reprennent la hiérarchie administrative. Chaque niveau est identifié par son code INSEE, déclaré unique, qui est la clé naturelle utilisée par l'utilisateur et par les fichiers d'import. La table `municipalities` contient les trois informations nécessaires au calcul sur un territoire : les coordonnées de la mairie, l'altitude et la population. Comme un zonage contient plusieurs communes et qu'une commune peut appartenir à plusieurs zonages, la relation passe par la table de liaison `zoning_municipalities`, dont la clé primaire (`zoning_id`, `municipality_id`) empêche d'ajouter deux fois la même commune. L'option `ON DELETE CASCADE` supprime ces liens avec le zonage.
 
@@ -308,24 +309,24 @@ Le schéma relationnel (`data/init_db.sql`) reprend les entités du domaine. Il 
 
 ## Vue des cas d'utilisation
 
-Le diagramme des cas d'utilisation reprend les acteurs définis en section 1.1 et les aligne sur F0 à F4 et FO3. L'utilisateur authentifié dispose aussi de tous les cas de l'utilisateur anonyme ; pour la lisibilité, ces liens ne sont pas répétés. « Gérer un zonage » couvre la modification de la description, l'ajout ou le retrait de communes, et la suppression.
+Le diagramme des cas d'utilisation reprend les acteurs définis en @sec-acteurs et les aligne sur F0 à F4 et FO3. L'utilisateur authentifié dispose aussi de tous les cas de l'utilisateur anonyme ; pour la lisibilité, ces liens ne sont pas répétés. « Gérer un zonage » couvre la modification de la description, l'ajout ou le retrait de communes, et la suppression.
 
-![Cas d'utilisation de l'API DJU](resources/diagrams_final/fig-cas.png){#fig-cas width=85% fig-pos="H"}
+![Cas d'utilisation de l'API DJU](resources/diagrams_final/fig-cas.png){#fig-cas width="85%" fig-pos="H"}
 
 ## Modèle du domaine
 
 Le modèle du domaine structure les objets métier en trois groupes, et les services qui les orchestrent.
 
-Le premier groupe décrit le territoire. `GeographicZone` est une classe abstraite dont héritent `Region`, `Department`, `Municipality` et `Zoning` (figure 2.4). Toutes exposent `get_municipalities()`, ce qui permet de traiter de la même façon une région, un département ou un zonage lors d'un calcul sur un territoire (polymorphisme). Le deuxième groupe décrit les données météo : `MeteoStation` et `TemperatureReport`. Le troisième décrit le calcul (figure 2.5) : un `DjuCalculation` représente une demande, applique un `DjuType` (mode et seuil) et produit une liste de `DjuResult`, un par période. Un `DjuCalculation` ne porte qu'un seul `DjuType` : avec deux seuils, deux calculs sont créés.
+Le premier groupe décrit le territoire. `GeographicZone` est une classe abstraite dont héritent `Region`, `Department`, `Municipality` et `Zoning` (@fig-classes-zone). Toutes exposent `get_municipalities()`, ce qui permet de traiter de la même façon une région, un département ou un zonage lors d'un calcul sur un territoire (polymorphisme). Le deuxième groupe décrit les données météo : `MeteoStation` et `TemperatureReport`. Le troisième décrit le calcul (@fig-classes-dju) : un `DjuCalculation` représente une demande, applique un `DjuType` (mode et seuil) et produit une liste de `DjuResult`, un par période. Un `DjuCalculation` ne porte qu'un seul `DjuType` : avec deux seuils, deux calculs sont créés.
 
-![Modèle du domaine : territoire et utilisateurs](resources/diagrams_final/fig-classes-zone.png){#fig-classes-zone width=80% fig-pos="H"}
+![Modèle du domaine : territoire et utilisateurs](resources/diagrams_final/fig-classes-zone.png){#fig-classes-zone width="80%" fig-pos="H"}
 
-![Modèle du domaine : données météo et calcul](resources/diagrams_final/fig-classes-dju.png){#fig-classes-dju width=95% fig-pos="H"}
+![Modèle du domaine : données météo et calcul](resources/diagrams_final/fig-classes-dju.png){#fig-classes-dju width="95%" fig-pos="H"}
 
 Les services orchestrent ces objets. Ils reçoivent leurs DAO dans leur constructeur et sont les seuls à les utiliser.
 
 | Service | Méthodes principales | Rôle |
-|:--------|:---------------------|:-----|
+|:---------------|:---------------------------------------|:---------------|
 | `DjuService` | `calculate_point_dju(request)`, `calculate_zone_dju(request, user)` | Contrôle la requête, crée les `DjuCalculation`, utilise le cache des calculs sur territoire |
 | `TemperatureService` | `find_candidate_stations(...)`, `estimate_daily_temperatures(...)`, `get_municipality_temperatures(...)` | Choisit les stations, lit leurs relevés, estime les températures par IDW |
 | `ZoneService` | `list_public_zones`, `get_zone`, `get_sub_zones`, `create_zoning`, `import_zoning`, `update_zoning`, `delete_zoning` | Lit les territoires, découpe une zone, gère les zonages et contrôle leur propriétaire |
@@ -339,11 +340,11 @@ Le calcul est réparti entre les classes en trois étapes. `DjuType.compute_dail
 
 L'initialisation enchaîne quatre scripts, séparés par des fichiers Parquet. Elle est lancée par l'Administrateur en dehors de l'API.
 
-`meteo.py` télécharge, pour chaque département, l'archive 1950–2024 et les données récentes 2025–2026 de Météo-France. Il ne garde que huit colonnes (`NUM_POSTE`, `DATE`, `NOM_USUEL`, `TN`, `TX`, `LAT`, `LON`, `ALTI`), renommées `TMIN` et `TMAX` pour les températures, et les dates à partir de 1990. Chaque département est enregistré à part : une coupure réseau ne fait perdre que le département en cours. `qualite_meteo.py` traite les valeurs manquantes (section 1.5) département par département, avec en contexte les stations situées à moins de 50 km, ce qui limite la mémoire tout en donnant le même résultat qu'un traitement global. `communes.py` récupère régions, départements et communes sur geo.api.gouv.fr, puis l'altitude de chaque mairie auprès de l'API d'altimétrie de l'IGN, par lots de 250 points.
+`meteo.py` télécharge, pour chaque département, l'archive 1950–2024 et les données récentes 2025–2026 de Météo-France. Il ne garde que huit colonnes (`NUM_POSTE`, `DATE`, `NOM_USUEL`, `TN`, `TX`, `LAT`, `LON`, `ALTI`), renommées `TMIN` et `TMAX` pour les températures, et les dates à partir de 1990. Chaque département est enregistré à part : une coupure réseau ne fait perdre que le département en cours. `qualite_meteo.py` traite les valeurs manquantes (@sec-manquantes) département par département, avec en contexte les stations situées à moins de 50 km, ce qui limite la mémoire tout en donnant le même résultat qu'un traitement global. `communes.py` récupère régions, départements et communes sur geo.api.gouv.fr, puis l'altitude de chaque mairie auprès de l'API d'altimétrie de l'IGN, par lots de 250 points.
 
 `init_db.py` crée les tables puis les remplit. Pour les quelque 32 millions de relevés, un `INSERT` ligne par ligne aurait pris des heures : les relevés sont copiés par lots dans une table temporaire avec la commande `COPY` de PostgreSQL, puis insérés avec `ON CONFLICT DO NOTHING`. Le script peut ainsi être relancé sans créer de doublons, par exemple pour ajouter les relevés récents.
 
-![Initialisation des données](resources/diagrams_final/fig-act-f0.png){#fig-act-f0 width=100% fig-pos="H"}
+![Initialisation des données](resources/diagrams_final/fig-act-f0.png){#fig-act-f0 width="100%" fig-pos="H"}
 
 ## Estimation des températures locales
 
@@ -353,7 +354,7 @@ Avant tout calcul DJU, le système estime une série quotidienne de température
 
 `find_candidate_stations()` trie les stations par distance et retient pour chaque lieu les $n$ plus proches. Les relevés de toutes les stations retenues sont lus en une seule requête SQL, même si une station sert à plusieurs lieux. Une station qui n'a aucun relevé sur la période est écartée et remplacée par la suivante, jusqu'à ce que chaque lieu ait $n$ stations avec des données. `estimate_daily_temperatures()` applique ensuite la correction d'altitude et la pondération inverse à la distance.
 
-![Estimation des températures locales](resources/diagrams_final/fig-act-temp.png){#fig-act-temp width=85% fig-pos="H"}
+![Estimation des températures locales](resources/diagrams_final/fig-act-temp.png){#fig-act-temp width="85%" fig-pos="H"}
 
 ## F1 — Calcul d'un DJU ponctuel
 
@@ -373,7 +374,7 @@ La requête `POST /dju/zone` désigne une zone par `zone_type` et `zone_id`, ave
 
 Le traitement se fait en deux temps, comme le montre la figure suivante. Le service découpe d'abord la zone en sous-zones selon le niveau d'agrégation, et cherche pour chaque sous-zone et chaque seuil un calcul déjà stocké. Il ne garde de côté que les calculs absents. Ensuite seulement, il estime en une fois les températures de toutes les communes de ces calculs : une région découpée par département ne lit donc les relevés qu'une seule fois.
 
-![Calcul d'un DJU sur un territoire (F3)](resources/diagrams_final/fig-seq-f3.png){#fig-seq-f3 width=100% fig-pos="H"}
+![Calcul d'un DJU sur un territoire (F3)](resources/diagrams_final/fig-seq-f3.png){#fig-seq-f3 width="100%" fig-pos="H"}
 
 Dans `run_for_zone()`, le DJU d'un jour pour une zone $Z$ est la moyenne des DJU communaux pondérée par la population $p_c$, calculée sur les seules communes qui ont une valeur ce jour-là :
 
@@ -381,7 +382,7 @@ $$
 \mathrm{DJU}_Z(t) = \frac{\sum_{c \in Z} p_c\, \mathrm{DJU}_c(t)}{\sum_{c \in Z} p_c}.
 $$
 
-Une commune dont la population est inconnue ne compte pas ; si aucune population n'est connue, la moyenne devient une moyenne simple. Ce choix reprend la méthode du service statistique du ministère (Sdes) : les DJU servant à analyser des consommations d'énergie, une commune très peuplée doit peser davantage qu'un village.
+Une commune dont la population est inconnue ne compte pas ; si aucune population n'est connue, la moyenne devient une moyenne simple. Ce choix reprend la méthode du service statistique du ministère (Sdes) [@sdes_dju] : les DJU servant à analyser des consommations d'énergie, une commune très peuplée doit peser davantage qu'un village.
 
 ## F4 — Zonages personnalisés
 
@@ -396,7 +397,7 @@ La modification (`PATCH`) peut changer la description, ajouter et retirer des co
 ## Synthèse
 
 | Fonct. | Route | Auth. | Paramètres d'entrée | Description |
-|:-------|:------|:------|:--------------------|:------------|
+|:------------|:------------|:------------|:--------------------|:------------|
 | F1 | `POST /dju/point` | Aucune | `latitude`, `longitude`, `altitude?`, `start_date`, `end_date`, `time_step`, `heating_threshold?`, `cooling_threshold?`, `number_of_stations?` | DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | `type` (`department` \| `region` \| `all`) | Liste des zonages officiels |
 | F2 | `GET /zones/{zone_type}/{zone_id}` | Aucune | `zone_type`, `zone_id` | Détail d'une zone et de ses communes |
@@ -410,6 +411,7 @@ La modification (`PATCH`) peut changer la description, ajouter et retirer des co
 | FO1 | — | — | Paramètres de F3 | Réutilisation automatique des calculs sur territoire |
 | FO2 | `?format=csv` | — | `json` (défaut) ou `csv` | Mise en forme de la sortie de F1 et F3 |
 | FO3 | `POST /user/zones/import` | Requise | `filename`, `content`, `name?`, `description?` | Import d'un zonage CSV ou JSON |
+| — | `GET /health` | Aucune | — | Vérifie que l'API répond |
 
 ¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé. Au moins un des deux seuils est requis pour F1 et F3.
 
@@ -419,13 +421,13 @@ Cette partie présente les points du code qui ont demandé le plus de réflexion
 
 ## Points techniques notables
 
-### Une estimation vectorisée
+### Une estimation vectorisée {#sec-vectorisation}
 
 La première version estimait les températures commune par commune et jour par jour, avec une requête SQL par station. Pour une région de plusieurs milliers de communes sur plusieurs années, ce calcul était beaucoup trop lent. Comme le suggérait le tuteur, nous l'avons vectorisé avec numpy et pandas.
 
 Les relevés de toutes les stations utiles sont lus en une seule requête, qui calcule directement la moyenne $(T_{\min} + T_{\max}) / 2$ et l'indicateur observé. Ils sont ensuite pivotés en un tableau avec une ligne par jour et une colonne par station. Pour chaque lieu, les poids $1/d^2$ ne dépendent que des distances : ils sont calculés une seule fois pour toute la période, et non pour chaque jour. La moyenne pondérée de tous les jours s'obtient alors par des opérations matricielles :
 
-```python
+``` python
 values = means_by_station[ids].to_numpy(dtype=float)      # jours x stations
 weights = 1 / np.maximum(distances, MIN_DISTANCE_KM) ** 2  # une fois pour la période
 has_value = ~np.isnan(values)
@@ -449,7 +451,7 @@ La base de production est hébergée sur un serveur distant qui ferme les connex
 Les services lèvent une seule exception, `ServiceError`, qui porte un message et un code HTTP. Les contrôleurs la traduisent en réponse HTTP par une fonction commune, `http_error()`. Le métier ne dépend ainsi pas de FastAPI, et chaque erreur renvoie un message compréhensible.
 
 | Code | Cas |
-|:-----|:----|
+|:--------------------------------------|:--------------------------------|
 | 400 | Incohérence entre paramètres : aucun seuil, dates dans le désordre, période sans données, code INSEE inconnu, fichier illisible |
 | 401 | Jeton absent, invalide ou expiré ; identifiants incorrects |
 | 403 | Zonage appartenant à un autre utilisateur |
@@ -457,12 +459,12 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 | 409 | Nom d'utilisateur déjà pris |
 | 422 | Format de requête invalide, contrôlé par Pydantic |
 
-## Tests
+## Tests {#sec-tests}
 
 Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de base de données ni d'accès au réseau : ils peuvent être lancés sur n'importe quelle machine, et leur résultat ne dépend pas du contenu de la base.
 
 | Couche testée | Fichier | Tests | Méthode |
-|:--------------|:--------|------:|:--------|
+|:------------------------|:---------------|---------------:|:---------------|
 | Objets métier | `test_business_objects.py` | 25 | Données construites à la main |
 | Services | `test_services.py` | 38 | DAO remplacées par de faux objets |
 | Contrôleurs et routes | `test_api.py` | 31 | Services remplacés, `TestClient` |
@@ -474,46 +476,111 @@ Les tests des objets métier vérifient la formule du DJU (valeur jamais négati
 
 Les 118 tests passent. La couverture de code, mesurée avec `coverage`, est la suivante :
 
-| Partie du code | Couverture |
-|:---------------|-----------:|
-| Objets métier | 92 à 100 % |
-| Services | 84 à 97 % |
-| Contrôleurs et schémas | 68 à 100 % |
-| DAO | 0 à 40 % |
-| Total de l'API | 74 % |
-| `qualite_meteo.py` (traitement des valeurs manquantes) | 99 % |
+| Partie du code                                         | Couverture |
+|:-------------------------------------------------------|-----------:|
+| Objets métier                                          | 86 à 100 % |
+| Services                                               |  84 à 97 % |
+| Contrôleurs et schémas                                 | 68 à 100 % |
+| DAO                                                    |  19 à 40 % |
+| Total de l'API                                         |       74 % |
+| `qualite_meteo.py` (traitement des valeurs manquantes) |       99 % |
 
 Les DAO sont peu couvertes, car elles ne font qu'exécuter des requêtes SQL et n'ont de sens que face à une vraie base. Elles ont été vérifiées de bout en bout : toutes les fonctionnalités ont été appelées sur une base contenant les données de la Bretagne, puis sur la base complète de la France.
+
+## Validation des résultats {#sec-validation}
+
+Les tests vérifient que le code fait ce que nous avons prévu, mais pas que les valeurs obtenues sont justes. Pour cela, nous avons comparé nos DJU à ceux que publie le Sdes pour chaque département [@sdes_dju]. Sa méthode est proche de la nôtre [@sdes_note] : température moyenne $(T_{\min} + T_{\max})/2$, DJU calculés par commune puis moyennés en pondérant par la population. Elle s'en distingue sur trois points : un seuil de 17 °C, une somme limitée à la « saison de chauffe » (janvier à mai et octobre à décembre), et une seule station par commune, la plus proche, sans correction d'altitude.
+
+Notre API permet de reproduire ces choix : seuil de 17 °C, une station (`number_of_stations = 1`), pas de correction d'altitude, puis somme des DJU mensuels de la saison de chauffe. Nous avons calculé l'année 2024 pour les 96 départements métropolitains, avec ces réglages puis avec les réglages par défaut (3 stations, correction d'altitude). Ce calcul a été fait par le code de l'API, sans passer par le cache, pour ne pas y stocker de calculs de test.
+
+| Réglages de l'API | Écart moyen (en valeur absolue) | Départements à moins de 5 % | Corrélation |
+|:-------------------------------------|---------:|---------:|--------:|
+| Proches du Sdes (1 station, sans altitude) | 1,8 % | 92 % | 0,99 |
+| Par défaut (3 stations, avec altitude) | 2,6 % | 85 % | 0,98 |
+
+: Comparaison avec les DJU départementaux 2024 du Sdes (seuil de 17 °C, saison de chauffe, 96 départements) {#tbl-validation}
+
+| Département | Sdes | API (1 station) | Écart | API (par défaut) | Écart |
+|:-----------------|------:|------:|------:|------:|------:|
+| Finistère        | 1 569 | 1 565 | −0,2 % | 1 537 | −2,0 % |
+| Ille-et-Vilaine  | 1 657 | 1 652 | −0,3 % | 1 643 | −0,8 % |
+| Haute-Garonne    | 1 365 | 1 356 | −0,7 % | 1 354 | −0,8 % |
+| Bas-Rhin         | 2 022 | 1 977 | −2,2 % | 1 938 | −4,2 % |
+| Rhône            | 1 759 | 1 670 | −5,0 % | 1 657 | −5,8 % |
+| Paris            | 1 611 | 1 497 | −7,1 % | 1 474 | −8,5 % |
+| Corse-du-Sud     |   962 |   862 | −10,3 % |  962 | +0,1 % |
+
+: Exemples de départements, du plus proche au plus éloigné des valeurs du Sdes {#tbl-validation-dep}
+
+Avec les réglages proches de ceux du Sdes, l'écart reste faible dans la grande majorité des départements, ce qui valide l'ensemble de la chaîne : téléchargement, comblement des trous, estimation, calcul et agrégation. Les écarts restants s'expliquent par le choix des stations. Le Sdes utilise environ 590 stations en 2024 et garde la même pour une commune toute l'année ; nous disposons de 4 555 stations, et la station la plus proche d'une commune n'est donc pas toujours celle retenue par le Sdes. L'effet est le plus fort là où la température change vite d'un lieu à l'autre : grandes villes (Paris, Rhône), relief et littoral montagneux (Corse-du-Sud). Les autres différences sont plus faibles : année de la population, coordonnées de la mairie plutôt que du centre de la commune, comblement des valeurs manquantes.
+
+## Performances {#sec-perf}
+
+Nous avons mesuré les temps de réponse depuis un ordinateur portable relié à la base distante : ils comprennent donc les échanges réseau avec le serveur PostgreSQL. Chaque mesure a été faite une seule fois et donne un ordre de grandeur.
+
+**Effet de la vectorisation.** Nous avons comparé l'estimation des températures des 332 communes d'Ille-et-Vilaine sur l'année 2024 avec la première version du code, qui traitait les communes une par une, puis avec la version vectorisée (@sec-vectorisation). Les deux versions produisent les mêmes 121 512 températures journalières (332 communes × 366 jours). L'ancienne version demande 90,8 s, la nouvelle 0,9 s : l'estimation est environ 100 fois plus rapide.
+
+**Temps de réponse de l'API.**
+
+| Requête (DJU de chauffage, pas mensuel sauf mention) | Communes | Premier calcul | Même requête (cache FO1) |
+|:-------------------------------------------|---------:|-----------:|-----------:|
+| F1 : point GPS (Rennes), 2024                |        — |      0,1 s | non stocké |
+| F3 : Ille-et-Vilaine, 2024                   |      332 |      1,3 s |      0,5 s |
+| F3 : Bretagne, 2024                          |    1 202 |      2,0 s |      0,6 s |
+| F3 : Bretagne, 2015–2024, pas annuel         |    1 202 |      4,9 s |      0,7 s |
+| F3 : Grand Est, 2024                         |    5 115 |      4,7 s |      0,9 s |
+
+: Temps de réponse mesurés sur la base complète {#tbl-perf}
+
+Le temps croît beaucoup moins vite que le nombre de communes : le Grand Est compte quatre fois plus de communes que la Bretagne, pour un temps à peine plus du double, car les communes voisines partagent les mêmes stations, dont les relevés ne sont lus qu'une fois. La validation ci-dessus, qui couvre les quelque 35 000 communes de métropole département par département, a pris environ 40 s pour chaque réglage. Une requête déjà calculée est servie en moins d'une seconde, ce qui confirme l'intérêt du cache des résultats et l'abandon de celui des températures.
+
+Le premier appel après le démarrage de l'API est plus lent (environ 10 s) : il lit la première et la dernière date des relevés, une requête `MIN`/`MAX` sur 32 millions de lignes, dont le résultat est ensuite gardé en mémoire.
 
 ## Utilisation de l'API
 
 L'API se lance depuis `api/src` avec `python main.py`, après avoir renseigné le fichier `.env` (connexion PostgreSQL et clé `JWT_SECRET`). La documentation interactive générée par FastAPI est alors disponible sur `http://localhost:5001/docs` : elle décrit chaque route, ses paramètres et ses réponses, et permet de les essayer directement.
 
-Par exemple, la requête suivante demande les DJU de chauffage mensuels de chaque département de la région 3 en 2024, avec un seuil de 18 °C :
+Par exemple, la requête suivante demande les DJU de chauffage mensuels de chaque département de la Bretagne en 2024, avec un seuil de 18 °C. L'identifiant de la région (8) est obtenu au préalable avec `GET /zones?type=region` :
 
-```json
+``` json
 POST /dju/zone
 {
-  "zone_type": "region", "zone_id": 3, "aggregation_level": "department",
+  "zone_type": "region", "zone_id": 8, "aggregation_level": "department",
   "start_date": "2024-01-01", "end_date": "2024-12-31",
   "heating_threshold": 18, "time_step": "month"
 }
 ```
 
-La réponse contient une entrée par département, et pour chaque mode demandé la liste des périodes :
+La réponse contient une entrée par département et, pour chaque mode demandé, la liste des périodes. L'extrait ci-dessous provient d'un appel réel sur la base complète (valeurs arrondies au centième) :
 
-```json
+``` json
 {
   "zones": [
-    { "zone_type": "department", "zone_id": 12, "name": "...",
+    { "zone_type": "department", "zone_id": 21, "name": "Côtes-d'Armor",
       "results": { "heating": [
         { "period_start": "2024-01-01", "period_end": "2024-01-31",
-          "value": ..., "days_with_data": 31, "observed_ratio": ... },
-        ... ] } },
+          "value": 363.28, "days_with_data": 31, "observed_ratio": 1.0 },
+        ...
+        { "period_start": "2024-12-01", "period_end": "2024-12-31",
+          "value": 311.24, "days_with_data": 31, "observed_ratio": 1.0 } ] } },
+    { "zone_type": "department", "zone_id": 28, "name": "Finistère", ... },
     ... ],
   "warning": null
 }
 ```
+
+Le tableau suivant résume la réponse pour les quatre départements :
+
+| Département | Janvier | Juillet | Décembre | Total 2024 |
+|:----------------|--------:|--------:|---------:|-----------:|
+| Côtes-d'Armor   |   363,3 |    32,8 |    311,2 |      2 105 |
+| Finistère       |   342,6 |    41,6 |    286,8 |      2 014 |
+| Ille-et-Vilaine |   376,6 |    17,1 |    328,0 |      2 047 |
+| Morbihan        |   356,9 |    30,3 |    309,7 |      2 015 |
+
+: DJU de chauffage (seuil de 18 °C) des départements bretons en 2024 {#tbl-bretagne}
+
+Les ordres de grandeur sont cohérents : l'Ille-et-Vilaine, plus continentale, a l'hiver le plus rigoureux et l'été le plus chaud, tandis que le Finistère, plus océanique, a l'hiver le plus doux mais garde des besoins de chauffage en juillet. Les 366 jours de l'année sont calculés pour chaque département. Le Morbihan a cependant un mois dont 87 % des jours seulement reposent sur des mesures observées : c'est ce qu'indique `observed_ratio`.
 
 Avec `?format=csv`, la même requête renvoie un fichier `dju.csv` dont les colonnes sont `zone`, `mode`, `period_start`, `period_end`, `value`, `days_with_data` et `observed_ratio`, directement exploitable dans un tableur.
 
@@ -522,9 +589,8 @@ Avec `?format=csv`, la même requête renvoie un fichier `dju.csv` dont les colo
 Plusieurs points pourraient être améliorés avec plus de temps.
 
 - **Recherche de communes.** Pour créer un zonage, il faut connaître les codes INSEE des communes. Une route de recherche par nom, et la possibilité d'ajouter d'un coup toutes les communes d'un département, rendraient F4 plus simple à utiliser.
-- **Temps de calcul à grande échelle.** Le premier calcul sur un territoire très étendu (la France entière, commune par commune) reste coûteux. Nous n'avons pas mesuré précisément ce temps ; un cache des températures communales pourrait redevenir utile pour ce cas.
+- **Démarrage de l'API.** Le premier appel après le démarrage prend environ 10 s, à cause de la requête `MIN`/`MAX` sur les dates des 32 millions de relevés (@sec-perf). Un index sur la colonne `date` de `temperature_reports` rendrait cette lecture quasi immédiate.
 - **Tests des DAO.** Les DAO ne sont vérifiées qu'à la main. Des tests automatiques sur un schéma PostgreSQL dédié, vidé après chaque test, compléteraient la couverture.
-- **Code inutilisé.** La classe `MunicipalityTemperatureDao`, issue du cache abandonné, devrait être retirée.
 - **Mise à jour des données.** Les relevés récents sont ajoutés en relançant les scripts à la main. Une mise à jour planifiée, et un conteneur Docker pour déployer l'API, faciliteraient l'exploitation.
 - **Correction climatique.** L'API pourrait aller jusqu'au calcul des coefficients de rigueur du climat, rapport entre un DJU de référence (par exemple la moyenne 1991–2020) et le DJU observé, qui servent à corriger les consommations.
 
@@ -532,9 +598,18 @@ Plusieurs points pourraient être améliorés avec plus de temps.
 
 Ce projet a abouti à une API complète de calcul des DJU, qui couvre toutes les fonctionnalités demandées (F0 à F4) et les trois fonctionnalités optionnelles. Elle calcule des DJU de chauffage et de climatisation en un point ou sur un territoire, pour n'importe quel seuil, période et pas de temps, à partir des relevés de toute la France depuis 1990.
 
+Les résultats ont été confrontés à une référence extérieure : avec des réglages proches de ceux du Sdes, nos DJU départementaux de 2024 s'en écartent en moyenne de 1,8 % (@sec-validation). Les temps de réponse restent de quelques secondes pour une région entière, et inférieurs à une seconde pour une requête déjà calculée (@sec-perf).
+
 La qualité des résultats repose sur deux choix principaux. Le premier est un traitement explicite des données manquantes, fait une seule fois avant le chargement en base, avec une méthode adaptée à la longueur de chaque trou et une traçabilité qui remonte jusqu'à l'utilisateur sous la forme de la part de jours observés. Le second est une estimation des températures par pondération inverse à la distance, corrigée de l'altitude, puis vectorisée pour rester rapide sur des milliers de communes.
 
 Le projet a aussi beaucoup évolué depuis le dossier d'analyse : le stockage des séries en Parquet, un des deux niveaux de cache et deux règles de nettoyage ont été abandonnés, chaque fois au profit d'une solution plus simple qui répondait au même besoin. Les remarques du tuteur ont conduit à réécrire la modélisation pour qu'elle corresponde exactement au code, ce qui a rendu le développement des services beaucoup plus rapide. Enfin, l'architecture en couches et l'injection des DAO dans les services nous ont permis d'écrire 118 tests qui ne dépendent d'aucune base de données.
+
+Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par domaine ont bien fonctionné : chacun savait de quelle partie il était responsable, et les remarques du tuteur ont été prises en compte rapidement. L'avancement a en revanche été irrégulier. Plusieurs semaines d'octobre ont peu avancé, comme le montre le suivi, et l'essentiel des services, de l'intégration et des tests s'est concentré entre fin octobre et début novembre. Les couches ayant été écrites séparément, leur assemblage a fait apparaître tardivement des écarts de noms et de signatures entre elles. Avec le recul, nous aurions dû rendre l'API exécutable de bout en bout dès les premières semaines, même avec une seule fonctionnalité, puis l'enrichir progressivement, en écrivant les tests en même temps que le code.
+
+# Références {.unnumbered}
+
+::: {#refs}
+:::
 
 \appendix
 
@@ -544,46 +619,58 @@ Le projet a aussi beaucoup évolué depuis le dossier d'analyse : le stockage de
 
 \FloatBarrier
 
-![Calcul d'un DJU ponctuel (F1)](resources/diagrams_final/fig-act-f1.png){#fig-act-f1 width=62% fig-pos="H"}
+![Calcul d'un DJU ponctuel (F1)](resources/diagrams_final/fig-act-f1.png){#fig-act-f1 width="62%" fig-pos="H"}
 
-![Création ou import d'un zonage (F4, FO3)](resources/diagrams_final/fig-act-create.png){#fig-act-create width=62% fig-pos="H"}
+![Création ou import d'un zonage (F4, FO3)](resources/diagrams_final/fig-act-create.png){#fig-act-create width="62%" fig-pos="H"}
 
-![Modification ou suppression d'un zonage (F4)](resources/diagrams_final/fig-act-manage.png){#fig-act-manage width=62% fig-pos="H"}
+![Modification ou suppression d'un zonage (F4)](resources/diagrams_final/fig-act-manage.png){#fig-act-manage width="62%" fig-pos="H"}
 
 \FloatBarrier
 
 ## Diagrammes de séquence complémentaires
 
-![Calcul d'un DJU ponctuel (F1)](resources/diagrams_final/fig-seq-f1.png){#fig-seq-f1 width=90% fig-pos="H"}
+![Calcul d'un DJU ponctuel (F1)](resources/diagrams_final/fig-seq-f1.png){#fig-seq-f1 width="90%" fig-pos="H"}
 
-![Consultation des zonages officiels (F2)](resources/diagrams_final/fig-seq-f2.png){#fig-seq-f2 width=76% fig-pos="H"}
+![Consultation des zonages officiels (F2)](resources/diagrams_final/fig-seq-f2.png){#fig-seq-f2 width="76%" fig-pos="H"}
 
-![Connexion d'un utilisateur](resources/diagrams_final/fig-seq-login.png){#fig-seq-login width=76% fig-pos="H"}
+![Connexion d'un utilisateur](resources/diagrams_final/fig-seq-login.png){#fig-seq-login width="76%" fig-pos="H"}
 
-![Création d'un zonage (F4)](resources/diagrams_final/fig-seq-create.png){#fig-seq-create width=83% fig-pos="H"}
+![Création d'un zonage (F4)](resources/diagrams_final/fig-seq-create.png){#fig-seq-create width="83%" fig-pos="H"}
 
-![Modification d'un zonage (F4)](resources/diagrams_final/fig-seq-manage.png){#fig-seq-manage width=83% fig-pos="H"}
+![Modification d'un zonage (F4)](resources/diagrams_final/fig-seq-manage.png){#fig-seq-manage width="83%" fig-pos="H"}
 
 \FloatBarrier
 
 ## Bilans personnels
 
+<!-- Bases rédigées à partir des commits et du suivi hebdomadaire : chacun doit relire, corriger et compléter la sienne. -->
+
 ### Aziz Yousfi
 
-*À rédiger.*
+Au début du projet, j'ai participé à la recherche des sources de données et au premier nettoyage des valeurs manquantes. J'ai ensuite écrit la plupart des objets métier (zones géographiques, stations, relevés, calcul DJU, utilisateur), puis les contrôleurs et les schémas Pydantic des trois groupes de routes. Après la reprise des diagrammes, j'ai relevé les écarts entre le modèle et les DAO et contrôleurs, puis j'ai réécrit le calcul des DJU dans les objets métier (`run()` et `run_for_zone()`) avec leurs tests unitaires.
+
+La principale difficulté a été de passer d'un calcul jour par jour à un calcul sur des tableaux pandas entiers, tout en gérant les périodes coupées par les dates de la requête et les populations inconnues. Ce travail m'a appris l'intérêt de garder les objets métier indépendants de la base : ils peuvent être testés avec quelques valeurs construites à la main, ce qui rend les erreurs de calcul faciles à repérer.
 
 ### Eudes Sterlin
 
-*À rédiger.*
+J'ai posé le socle de l'API : le premier `main.py`, le premier contrôleur DJU avec son schéma, la première version du service DJU et le README. J'ai également écrit la partie sur les fonctionnalités de l'API dans le dossier d'analyse et un premier fichier de tests du service. Dans la deuxième moitié du projet, j'ai écrit `DjuDao`, qui enregistre et relit les calculs sur territoire, puis le schéma SQL final, qui peut être relancé sans perte de données. J'ai aussi mis à jour les diagrammes et rédigé l'état des lieux du code.
+
+La difficulté principale a été de définir la clé d'un calcul stocké : il faut y inclure tous les paramètres qui changent le résultat (seuil, pas de temps, nombre de stations, altitude), sinon deux demandes différentes reçoivent la même réponse. J'ai retenu de ce projet l'importance de faire évoluer le schéma de la base et le code ensemble, et de documenter les écarts au fur et à mesure.
 
 ### Gabriel Dahan
 
-*À rédiger.*
+J'ai mis en place la structure du dépôt, le gabarit des rapports, la connexion à la base et le suivi hebdomadaire. Pour le dossier d'analyse, j'ai produit plusieurs diagrammes de séquence et d'activité, puis converti l'ensemble des diagrammes en images et les ai intégrés au rapport. J'ai ensuite écrit la DAO des utilisateurs, complété le script de création des tables et corrigé le dossier d'analyse à partir des remarques du tuteur. Dans la dernière phase, j'ai rendu l'API exécutable (gestion commune des erreurs, enregistrement des routes), puis implémenté les services et les routes de toutes les fonctionnalités et aligné la couche DAO sur le nouveau modèle.
+
+La difficulté principale a été d'intégrer des parties écrites séparément : les noms de champs attendus par les services ne correspondaient pas toujours à ceux des schémas ou des DAO. Le modèle commun réécrit après les remarques du tuteur a beaucoup simplifié ce travail. J'en retiens qu'un modèle partagé et précis fait gagner plus de temps qu'il n'en coûte, et que l'injection des DAO dans les services rend les tests beaucoup plus simples.
 
 ### Gwenaël Lassalle
 
-*À rédiger.*
+J'ai commencé par rechercher les sources de données et écrire l'import du référentiel des communes. J'ai rédigé l'introduction et la première partie du dossier d'analyse, ainsi que plusieurs diagrammes, que j'ai mis à jour après les remarques du tuteur. J'ai également étudié les méthodes possibles pour traiter les données manquantes. En fin de projet, j'ai chargé les données de la France entière dans la base PostgreSQL distante (4 555 stations, environ 32 millions de relevés), ajouté la reconnexion automatique de l'API et rédigé le rapport final.
+
+La difficulté principale a été le volume des données : une insertion ligne par ligne était beaucoup trop lente, et le serveur distant fermait les connexions inactives, ce qui faisait échouer la première requête après une pause. J'ai appris à utiliser `COPY` pour les chargements massifs et à rendre une connexion robuste. Ce projet m'a aussi montré qu'un rapport se construit tout au long du projet, et pas seulement à la fin.
 
 ### Marceau Feral
 
-*À rédiger.*
+J'ai travaillé sur les données météo dès le début : import et premier nettoyage des relevés, script d'initialisation de la base, puis une première version des DAO. Dans le dossier d'analyse, j'ai rédigé la partie sur les valeurs manquantes et la conclusion. J'ai ensuite écrit les fonctions de comblement des trous et réécrit les diagrammes avec leurs explications. Dans la dernière phase, j'ai construit la chaîne de données complète (`meteo.py`, `qualite_meteo.py`, `communes.py`, `init_db.py`) avec ses tests, ajouté le traitement des valeurs aberrantes et vectorisé l'estimation des températures.
+
+La difficulté principale a été de combler les trous sans jamais réutiliser une valeur déjà comblée, tout en traitant les départements un par un pour limiter la mémoire. J'en retiens qu'un traitement des données doit rester traçable : garder la source de chaque valeur nous a permis d'indiquer à l'utilisateur la part de jours réellement observés.

@@ -68,8 +68,10 @@ class ZoneService:
         codes = self._clean_codes(codes_insee)
         if not codes:
             raise ServiceError("Aucun code INSEE fourni.", 400)
+        # Les codes sont vérifiés avant de créer le zonage : un code inconnu refuse tout le zonage
+        municipalities = self._find_municipalities(codes)
         zoning = user.create_zoning(name=name, description=description)
-        for municipality in self._find_municipalities(codes):
+        for municipality in municipalities:
             zoning.add_municipality(municipality)
         return self.zoning_dao.create(zoning)
 
@@ -120,10 +122,10 @@ class ZoneService:
         return zoning
 
     def delete_zoning(self, user: User, zoning_id: int) -> None:
-        """Supprime les calculs stockés du zonage, puis le zonage."""
+        """Supprime le zonage, puis ses calculs stockés (aucune clé étrangère ne les lie)."""
         zoning = self._get_owned_zoning(user, zoning_id)
-        self.dju_dao.delete_calculations_for_zone("zoning", zoning.id)
         self.zoning_dao.delete(zoning.id)
+        self.dju_dao.delete_calculations_for_zone("zoning", zoning.id)
 
     def _get_owned_zoning(self, user: User | None, zoning_id: int) -> Zoning:
         """Zonage de l'utilisateur ; 401 sans utilisateur, 404 si absent, 403 s'il appartient à un autre."""
