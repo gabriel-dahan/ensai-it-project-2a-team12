@@ -37,8 +37,11 @@ class User:
         return self.__password.decode("utf-8")
 
     def check_password(self, password: str) -> bool:
-        return bcrypt.checkpw(password.encode("utf-8"), self.__password)
-
+        encoded = password.encode("utf-8")
+        if len(encoded) > 72:  # impossible à l'inscription : ne peut pas correspondre
+            return False
+        return bcrypt.checkpw(encoded, self.__password)
+        
     def create_zoning(self, name: str, description: str | None = None) -> Zoning:
         """Nouveau zonage (vide) appartenant à cet utilisateur."""
         return Zoning(id=None, name=name, description=description, owner_id=self.id)
