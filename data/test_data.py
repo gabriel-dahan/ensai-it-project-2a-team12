@@ -236,6 +236,20 @@ def test_trou_long_sans_voisine_utilisable():
     assert ligne["SOURCE_TMIN"] == "manquante"
 
 
+def test_trou_moyen_station_isolee_comble_par_tendance_locale():
+    """Trou de 4 jours sans aucune voisine : comblé par la tendance locale seule."""
+    jours = np.arange(60)
+    vrai_tmin = 0.5 * jours
+    tmin = vrai_tmin.copy()
+    tmin[20:24] = np.nan
+    df = _station("A", tmin=tmin, tmax=tmin + 10, lat=45.0)  # aucune autre station
+    resultat = qualite_meteo.traiter_valeurs_manquantes(df)
+
+    ligne = _ligne(resultat, "A", 21)
+    assert ligne["SOURCE_TMIN"] == "interpolee_3_7j"
+    assert ligne["TMIN"] == pytest.approx(vrai_tmin[21])
+
+
 # --- communes.py ---
 
 
