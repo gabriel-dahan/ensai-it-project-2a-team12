@@ -1,10 +1,10 @@
-# API DJU
+# DJU API
 
-API FastAPI de calcul des degrés-jours unifiés (DJU) : en un point, sur une région, un département ou un zonage personnel.
+FastAPI application that computes Degree Days (DJU, *degrés-jours unifiés*): at a point, over a region, a department or a personal zoning.
 
 ## Installation
 
-Depuis la racine du dépôt :
+From the root of the repository:
 
 ```bash
 python -m venv .venv
@@ -14,7 +14,7 @@ pip install -e "api[dev]"
 
 ## Configuration
 
-Créer un fichier `.env` à la racine du dépôt :
+Create a `.env` file at the root of the repository:
 
 ```
 POSTGRES_HOST=...
@@ -24,34 +24,34 @@ POSTGRES_USER=...
 POSTGRES_PASSWORD=...
 POSTGRES_SCHEMA=...
 
-JWT_SECRET=une-longue-chaine-secrete
+JWT_SECRET=a-long-secret-string
 
 UVICORN_HOST=0.0.0.0
 UVICORN_PORT=5001
 ```
 
-## Chargement des données
+## Loading the data
 
-Les scripts du dossier `data/` téléchargent les données ouvertes (communes, relevés Météo-France), les nettoient puis les chargent dans PostgreSQL selon le schéma `data/init_db.sql`. `init_db.py` lit le même `.env`. Depuis la racine du dépôt, dans cet ordre :
+The scripts of the `data/` folder download the open data (municipalities, Météo-France records), clean them and load them into PostgreSQL following the `data/init_db.sql` schema. `init_db.py` reads the same `.env`. From the root of the repository, in this order:
 
 ```bash
 pip install -r data/requirements.txt
-python data/meteo.py          # relevés Météo-France -> raw_data/meteo_france_brut.parquet
-python data/qualite_meteo.py  # comble les trous     -> raw_data/meteo_france_nettoye.parquet
-python data/communes.py       # territoire           -> raw_data/regions, departements, communes.parquet
-python data/init_db.py        # crée les tables (init_db.sql) et les remplit à partir des Parquet
+python data/meteo.py          # Météo-France records -> raw_data/meteo_france_brut.parquet
+python data/qualite_meteo.py  # fills the gaps       -> raw_data/meteo_france_nettoye.parquet
+python data/communes.py       # territory            -> raw_data/regions, departements, communes.parquet
+python data/init_db.py        # creates the tables (init_db.sql) and fills them from the Parquet files
 ```
 
-`meteo.py` accepte une liste de départements (`python data/meteo.py 22 29 35 56`). `init_db.py` est relançable : les lignes déjà présentes sont ignorées. Les tests des scripts de données se lancent avec `pytest data/test_data.py`.
+`meteo.py` accepts a list of departments (`python data/meteo.py 22 29 35 56`). `init_db.py` can be run again: rows already in the database are skipped. The tests of the data scripts are run with `pytest data/test_data.py`.
 
-## Lancement
+## Running
 
 ```bash
 cd api/src
 python main.py
 ```
 
-La documentation interactive est sur http://localhost:5001/docs.
+The interactive documentation is available at http://localhost:5001/docs.
 
 ## Tests
 
@@ -60,4 +60,4 @@ cd api
 python -m pytest
 ```
 
-Les tests de `test/test_api.py` n'ont pas besoin de base : les services sont remplacés par de faux objets.
+The tests in `test/test_api.py` do not need a database: the services are replaced by fake objects.
