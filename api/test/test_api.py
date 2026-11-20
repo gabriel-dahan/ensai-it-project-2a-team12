@@ -394,3 +394,40 @@ def test_login_wrong_password(client, monkeypatch):
     monkeypatch.setattr(user_controller, "service", FakeAuthService())
     response = client.post("/user/login", json={"username": "bob", "password": "faux"})
     assert response.status_code == 401
+
+
+
+def test_register_password_too_short_is_422(client, monkeypatch):
+    monkeypatch.setattr(user_controller, "service", FakeAuthService())
+    response = client.post("/user/register", json={"username": "bob", "password": "court"})
+    assert response.status_code == 422
+
+
+def test_register_password_over_72_bytes_is_422(client, monkeypatch):
+    monkeypatch.setattr(user_controller, "service", FakeAuthService())
+    response = client.post("/user/register", json={"username": "bob", "password": "a" * 73})
+    assert response.status_code == 422
+
+
+def test_register_username_too_short_is_422(client, monkeypatch):
+    monkeypatch.setattr(user_controller, "service", FakeAuthService())
+    response = client.post("/user/register", json={"username": "ab", "password": "motdepasse"})
+    assert response.status_code == 422
+
+
+def test_login_missing_password_is_422(client, monkeypatch):
+    monkeypatch.setattr(user_controller, "service", FakeAuthService())
+    response = client.post("/user/login", json={"username": "bob"})
+    assert response.status_code == 422
+
+
+def test_point_latitude_out_of_range_is_422(client, dju_service):
+    response = client.post("/dju/point", json={**POINT_BODY, "latitude": 95})
+    assert response.status_code == 422
+    assert dju_service.calls == []  # le service n'est jamais appelé
+
+
+@pytest.mark.parametrize("number_of_stations", [0, 11])
+def test_point_number_of_stations_out_of_range_is_422(client, dju_service, number_of_stations):
+    response = client.post("/dju/point", json={**POINT_BODY, "number_of_stations": number_of_stations})
+    assert response.status_code == 422
