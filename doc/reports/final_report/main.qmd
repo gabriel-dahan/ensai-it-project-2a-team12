@@ -165,15 +165,15 @@ Cette partie formalise le périmètre, les acteurs, les fonctionnalités, les ch
 
 Trois profils interagissent avec le système.
 
- - L'*utilisateur anonyme* calcule des DJU et consulte les zonages officiels sans compte.
+- L'*utilisateur anonyme* calcule des DJU et consulte les zonages officiels sans compte.
 
- - L'*utilisateur authentifié* dispose des mêmes droits et peut en plus créer, modifier, supprimer ou importer des zonages personnalisés, puis lancer des calculs dessus.
+- L'*utilisateur authentifié* dispose des mêmes droits et peut en plus créer, modifier, supprimer ou importer des zonages personnalisés, puis lancer des calculs dessus.
 
- - L'*Administrateur* n'utilise pas l'API métier : il exécute, une seule fois et en dehors de l'API, les scripts qui téléchargent, nettoient et chargent les données sources dans la base (F0).
+- L'*Administrateur* n'utilise pas l'API métier : il exécute, une seule fois et en dehors de l'API, les scripts qui téléchargent, nettoient et chargent les données sources dans la base (F0).
 
- - Un *zonage* désigne un ensemble de communes. On distingue les zonages officiels (départements, régions), publics pour tous, et les zonages personnalisés, propres à un utilisateur authentifié.
+- Un *zonage* désigne un ensemble de communes. On distingue les zonages officiels (départements, régions), publics pour tous, et les zonages personnalisés, propres à un utilisateur authentifié.
 
- - Le *seuil* de calcul est toujours fourni dans la requête. Si l'utilisateur ne fournit qu'un seuil de climatisation, seuls les DJU de climatisation sont calculés. S'il ne fournit qu'un seuil de chauffage, seuls les DJU de chauffage sont calculés. Les deux seuils peuvent être demandés simultanément ; les températures ne sont alors estimées qu'une seule fois.
+- Le *seuil* de calcul est toujours fourni dans la requête. Si l'utilisateur ne fournit qu'un seuil de climatisation, seuls les DJU de climatisation sont calculés. S'il ne fournit qu'un seuil de chauffage, seuls les DJU de chauffage sont calculés. Les deux seuils peuvent être demandés simultanément ; les températures ne sont alors estimées qu'une seule fois.
 
 ## Fonctionnalités de base
 
@@ -326,7 +326,7 @@ Le premier groupe décrit le territoire. `GeographicZone` est une classe abstrai
 Les services orchestrent ces objets. Ils reçoivent leurs DAO dans leur constructeur et sont les seuls à les utiliser.
 
 | Service | Méthodes principales | Rôle |
-|:---------------|:---------------------------------------|:---------------|
+|:----------------|:-------------------------------------|:----------------|
 | `DjuService` | `calculate_point_dju(request)`, `calculate_zone_dju(request, user)` | Contrôle la requête, crée les `DjuCalculation`, utilise le cache des calculs sur territoire |
 | `TemperatureService` | `find_candidate_stations(...)`, `estimate_daily_temperatures(...)`, `get_municipality_temperatures(...)` | Choisit les stations, lit leurs relevés, estime les températures par IDW |
 | `ZoneService` | `list_public_zones`, `get_zone`, `get_sub_zones`, `create_zoning`, `import_zoning`, `update_zoning`, `delete_zoning` | Lit les territoires, découpe une zone, gère les zonages et contrôle leur propriétaire |
@@ -382,6 +382,8 @@ $$
 \mathrm{DJU}_Z(t) = \frac{\sum_{c \in Z} p_c\, \mathrm{DJU}_c(t)}{\sum_{c \in Z} p_c}.
 $$
 
+Pour chaque jour, la moyenne pondérée est calculée uniquement sur les communes disposant d'une valeur de DJU et d'une population connue, représentées par l'ensemble (Z_t). Le dénominateur correspond donc à la somme des populations de ces seules communes, et non à la population totale de la zone. Si aucune population n'est disponible parmi les communes disposant d'un DJU, une moyenne simple est utilisée.
+
 Une commune dont la population est inconnue ne compte pas ; si aucune population n'est connue, la moyenne devient une moyenne simple. Ce choix reprend la méthode du service statistique du ministère (Sdes) [@sdes_dju] : les DJU servant à analyser des consommations d'énergie, une commune très peuplée doit peser davantage qu'un village.
 
 ## F4 — Zonages personnalisés
@@ -397,7 +399,7 @@ La modification (`PATCH`) peut changer la description, ajouter et retirer des co
 ## Synthèse
 
 | Fonct. | Route | Auth. | Paramètres d'entrée | Description |
-|:------------|:------------|:------------|:--------------------|:------------|
+|:-------------|:-------------|:-------------|:----------------|:-------------|
 | F1 | `POST /dju/point` | Aucune | `latitude`, `longitude`, `altitude?`, `start_date`, `end_date`, `time_step`, `heating_threshold?`, `cooling_threshold?`, `number_of_stations?` | DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | `type` (`department` \| `region` \| `all`) | Liste des zonages officiels |
 | F2 | `GET /zones/{zone_type}/{zone_id}` | Aucune | `zone_type`, `zone_id` | Détail d'une zone et de ses communes |
@@ -464,7 +466,7 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de base de données ni d'accès au réseau : ils peuvent être lancés sur n'importe quelle machine, et leur résultat ne dépend pas du contenu de la base.
 
 | Couche testée | Fichier | Tests | Méthode |
-|:------------------------|:---------------|---------------:|:---------------|
+|:----------------------|:----------------|----------------:|:----------------|
 | Objets métier | `test_business_objects.py` | 25 | Données construites à la main |
 | Services | `test_services.py` | 38 | DAO remplacées par de faux objets |
 | Contrôleurs et routes | `test_api.py` | 31 | Services remplacés, `TestClient` |
@@ -494,23 +496,23 @@ Les tests vérifient que le code fait ce que nous avons prévu, mais pas que les
 Notre API permet de reproduire ces choix : seuil de 17 °C, une station (`number_of_stations = 1`), pas de correction d'altitude, puis somme des DJU mensuels de la saison de chauffe. Nous avons calculé l'année 2024 pour les 96 départements métropolitains, avec ces réglages puis avec les réglages par défaut (3 stations, correction d'altitude). Ce calcul a été fait par le code de l'API, sans passer par le cache, pour ne pas y stocker de calculs de test.
 
 | Réglages de l'API | Écart moyen (en valeur absolue) | Départements à moins de 5 % | Corrélation |
-|:-------------------------------------|---------:|---------:|--------:|
+|:---------------------------------|------------:|------------:|------------:|
 | Proches du Sdes (1 station, sans altitude) | 1,8 % | 92 % | 0,99 |
 | Par défaut (3 stations, avec altitude) | 2,6 % | 85 % | 0,98 |
 
-: Comparaison avec les DJU départementaux 2024 du Sdes (seuil de 17 °C, saison de chauffe, 96 départements) {#tbl-validation}
+: Comparaison avec les DJU départementaux 2024 du Sdes (seuil de 17 °C, saison de chauffe, 96 départements)
 
-| Département | Sdes | API (1 station) | Écart | API (par défaut) | Écart |
-|:-----------------|------:|------:|------:|------:|------:|
-| Finistère        | 1 569 | 1 565 | −0,2 % | 1 537 | −2,0 % |
-| Ille-et-Vilaine  | 1 657 | 1 652 | −0,3 % | 1 643 | −0,8 % |
-| Haute-Garonne    | 1 365 | 1 356 | −0,7 % | 1 354 | −0,8 % |
-| Bas-Rhin         | 2 022 | 1 977 | −2,2 % | 1 938 | −4,2 % |
-| Rhône            | 1 759 | 1 670 | −5,0 % | 1 657 | −5,8 % |
-| Paris            | 1 611 | 1 497 | −7,1 % | 1 474 | −8,5 % |
-| Corse-du-Sud     |   962 |   862 | −10,3 % |  962 | +0,1 % |
+| Département     |  Sdes | API (1 station) |   Écart | API (par défaut) |  Écart |
+|:----------------|------:|----------------:|--------:|-----------------:|-------:|
+| Finistère       | 1 569 |           1 565 |  −0,2 % |            1 537 | −2,0 % |
+| Ille-et-Vilaine | 1 657 |           1 652 |  −0,3 % |            1 643 | −0,8 % |
+| Haute-Garonne   | 1 365 |           1 356 |  −0,7 % |            1 354 | −0,8 % |
+| Bas-Rhin        | 2 022 |           1 977 |  −2,2 % |            1 938 | −4,2 % |
+| Rhône           | 1 759 |           1 670 |  −5,0 % |            1 657 | −5,8 % |
+| Paris           | 1 611 |           1 497 |  −7,1 % |            1 474 | −8,5 % |
+| Corse-du-Sud    |   962 |             862 | −10,3 % |              962 | +0,1 % |
 
-: Exemples de départements, du plus proche au plus éloigné des valeurs du Sdes {#tbl-validation-dep}
+: Exemples de départements, du plus proche au plus éloigné des valeurs du Sdes
 
 Avec les réglages proches de ceux du Sdes, l'écart reste faible dans la grande majorité des départements, ce qui valide l'ensemble de la chaîne : téléchargement, comblement des trous, estimation, calcul et agrégation. Les écarts restants s'expliquent par le choix des stations. Le Sdes utilise environ 590 stations en 2024 et garde la même pour une commune toute l'année ; nous disposons de 4 555 stations, et la station la plus proche d'une commune n'est donc pas toujours celle retenue par le Sdes. L'effet est le plus fort là où la température change vite d'un lieu à l'autre : grandes villes (Paris, Rhône), relief et littoral montagneux (Corse-du-Sud). Les autres différences sont plus faibles : année de la population, coordonnées de la mairie plutôt que du centre de la commune, comblement des valeurs manquantes.
 
@@ -523,14 +525,14 @@ Nous avons mesuré les temps de réponse depuis un ordinateur portable relié à
 **Temps de réponse de l'API.**
 
 | Requête (DJU de chauffage, pas mensuel sauf mention) | Communes | Premier calcul | Même requête (cache FO1) |
-|:-------------------------------------------|---------:|-----------:|-----------:|
-| F1 : point GPS (Rennes), 2024                |        — |      0,1 s | non stocké |
-| F3 : Ille-et-Vilaine, 2024                   |      332 |      1,3 s |      0,5 s |
-| F3 : Bretagne, 2024                          |    1 202 |      2,0 s |      0,6 s |
-| F3 : Bretagne, 2015–2024, pas annuel         |    1 202 |      4,9 s |      0,7 s |
-| F3 : Grand Est, 2024                         |    5 115 |      4,7 s |      0,9 s |
+|:---------------------------------|------------:|------------:|------------:|
+| F1 : point GPS (Rennes), 2024 | — | 0,1 s | non stocké |
+| F3 : Ille-et-Vilaine, 2024 | 332 | 1,3 s | 0,5 s |
+| F3 : Bretagne, 2024 | 1 202 | 2,0 s | 0,6 s |
+| F3 : Bretagne, 2015–2024, pas annuel | 1 202 | 4,9 s | 0,7 s |
+| F3 : Grand Est, 2024 | 5 115 | 4,7 s | 0,9 s |
 
-: Temps de réponse mesurés sur la base complète {#tbl-perf}
+: Temps de réponse mesurés sur la base complète
 
 Le temps croît beaucoup moins vite que le nombre de communes : le Grand Est compte quatre fois plus de communes que la Bretagne, pour un temps à peine plus du double, car les communes voisines partagent les mêmes stations, dont les relevés ne sont lus qu'une fois. La validation ci-dessus, qui couvre les quelque 35 000 communes de métropole département par département, a pris environ 40 s pour chaque réglage. Une requête déjà calculée est servie en moins d'une seconde, ce qui confirme l'intérêt du cache des résultats et l'abandon de celui des températures.
 
@@ -571,14 +573,14 @@ La réponse contient une entrée par département et, pour chaque mode demandé,
 
 Le tableau suivant résume la réponse pour les quatre départements :
 
-| Département | Janvier | Juillet | Décembre | Total 2024 |
+| Département     | Janvier | Juillet | Décembre | Total 2024 |
 |:----------------|--------:|--------:|---------:|-----------:|
 | Côtes-d'Armor   |   363,3 |    32,8 |    311,2 |      2 105 |
 | Finistère       |   342,6 |    41,6 |    286,8 |      2 014 |
 | Ille-et-Vilaine |   376,6 |    17,1 |    328,0 |      2 047 |
 | Morbihan        |   356,9 |    30,3 |    309,7 |      2 015 |
 
-: DJU de chauffage (seuil de 18 °C) des départements bretons en 2024 {#tbl-bretagne}
+: DJU de chauffage (seuil de 18 °C) des départements bretons en 2024
 
 Les ordres de grandeur sont cohérents : l'Ille-et-Vilaine, plus continentale, a l'hiver le plus rigoureux et l'été le plus chaud, tandis que le Finistère, plus océanique, a l'hiver le plus doux mais garde des besoins de chauffage en juillet. Les 366 jours de l'année sont calculés pour chaque département. Le Morbihan a cependant un mois dont 87 % des jours seulement reposent sur des mesures observées : c'est ce qu'indique `observed_ratio`.
 
