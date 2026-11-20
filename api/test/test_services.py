@@ -117,6 +117,12 @@ class FakeGeoZoneDao:
 
     def get_municipalities_by_insee(self, codes):
         return [m for m in self.municipalities if m.insee_code in codes]
+    
+    def get_regions(self):
+        return [self.region] if self.region else []
+
+    def get_departments(self):
+        return [self.department] if self.department else []
 
 
 class FakeZoningDao:
@@ -287,6 +293,14 @@ def test_municipality_temperatures_one_column_per_municipality():
 
     assert list(means.columns) == ["35238", "35047"]
     assert means.loc[DAY1, "35238"] == pytest.approx(10.0)  # sans correction d'altitude
+
+
+
+def test_no_station_at_all_gives_empty_reports():
+    service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
+    stations, reports = service.find_candidate_stations(ORIGIN, 3, DAY1, DAY2)
+    assert stations == {"lieu": []}
+    assert reports.empty
 
 
 # ---------- DjuService : point ----------
@@ -549,6 +563,67 @@ def test_delete_zoning():
     assert service.zoning_dao.deleted == 5
 
 
+
+def test_list_public_zones():
+    region = Region(id=53, name="Bretagne", insee_code="53")
+    department = make_department()
+    service = make_zone_service(department=department, region=region)
+    assert service.list_public_zones("region") == [region]
+    assert service.list_public_zones("department") == [department]
+    assert service.list_public_zones("all") == [region, department]
+
+
+def test_list_public_zones_unknown_type_is_400():
+    with pytest.raises(ServiceError) as error:
+        make_zone_service().list_public_zones("pays")
+    assert error.value.status_code == 400
+
+
+def test_get_zone_unknown_type_is_400():
+    with pytest.raises(ServiceError) as error:
+        make_zone_service().get_zone("pays", 1)
+    assert error.value.status_code == 400
+
+
+def test_sub_zones_by_zone_municipality_and_department():
+    department = make_department()
+    service = make_zone_service()
+    assert service.get_sub_zones(department, "zone") == [department]
+    assert service.get_sub_zones(department, "department") == [department]
+    assert [m.insee_code for m in service.get_sub_zones(department, "municipality")] == ["35238", "35047"]
+
+
+def test_sub_zones_unknown_level_is_400():
+    with pytest.raises(ServiceError) as error:
+        make_zone_service().get_sub_zones(make_department(), "pays")
+    assert error.value.status_code == 400
+
+
+def test_create_zoning_without_code_is_400():
+    service = make_zone_service(municipalities=[municipality("35238")])
+    with pytest.raises(ServiceError) as error:
+        service.create_zoning(ALICE, "Test", None, ["", "  "])
+    assert error.value.status_code == 400
+
+
+def test_update_zoning_cannot_become_empty():
+    dju_dao = FakeDjuDao()
+    service = make_zone_service(zoning=make_zoning(), dju_dao=dju_dao)
+    with pytest.raises(ServiceError) as error:
+        service.update_zoning(ALICE, 5, None, [], ["35238"])
+    assert error.value.status_code == 400
+    assert service.zoning_dao.updated is None  # rien n'est enregistré
+    assert dju_dao.deleted == []  # le cache n'est pas supprimé
+
+
+def test_update_zoning_with_unknown_code_is_400():
+    service = make_zone_service(municipalities=[municipality("35238")], zoning=make_zoning())
+    with pytest.raises(ServiceError) as error:
+        service.update_zoning(ALICE, 5, None, ["99999"], [])
+    assert error.value.status_code == 400
+    assert "99999" in str(error.value)
+
+
 # ---------- AuthService ----------
 
 
@@ -597,3 +672,16 @@ def test_invalid_token_is_401(jwt_secret):
         with pytest.raises(ServiceError) as error:
             service.get_current_user(token)
         assert error.value.status_code == 401
+
+
+def test_login_unknown_user_is_401(jwt_secret):
+    with pytest.raises(ServiceError) as error:
+        AuthService(FakeUserDao()).authenticate("personne", "motdepasse")
+    assert error.value.status_code == 401
+
+
+def test_login_with_password_over_72_bytes_is_401_not_500(jwt_secret):
+    service = AuthService(FakeUserDao([User(username="dave", password="bon", id=4)]))
+    with pytest.raises(ServiceError) as error:
+        service.authenticate("dave", "a" * 73)
+    assert error.value.status_code == 401
