@@ -275,7 +275,7 @@ def _combler_gaps_moyens(
         ecarts = pd.Series({v: (cible - voisines_alignees[v]).mean() for v in voisines})
         moyenne_voisines = (voisines_alignees + ecarts).mean(axis=1)
 
-        candidat = 0.7 * tendance_locale + 0.3 * moyenne_voisines
+        candidat = (0.7 * tendance_locale + 0.3 * moyenne_voisines).fillna(tendance_locale)
 
         a_remplir = eligible & grille[colonne].isna() & candidat.notna()
         grille.loc[a_remplir, colonne] = candidat[a_remplir]
