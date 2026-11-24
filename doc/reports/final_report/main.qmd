@@ -145,7 +145,6 @@ ENSAI\\
 2026--2027
 \end{center}
 \end{titlepage}
-
 \begingroup
 \setstretch{1.0}
 \setlength{\parskip}{0pt}
@@ -230,6 +229,7 @@ Avec une seule source de données, les calculs ne risquent plus de mélanger deu
 ### Interpolation spatiale et altitude
 
 \needspace{8\baselineskip}
+
 Il y a rarement une station exactement à l'endroit demandé. Nous estimons donc la température à partir des $n$ stations les plus proches, par pondération inverse du carré de la distance (IDW) [@shepard1968], les distances étant calculées par la formule d'Haversine [@sinnott1984] :
 
 $$
@@ -339,7 +339,7 @@ Le troisième groupe décrit le calcul (@fig-classes-dju). Un `DjuCalculation` r
 Les services coordonnent ces objets. Ce sont les seuls à utiliser les DAO.
 
 | Service | Méthodes principales | Rôle |
-|:--------------------|:-------------------------------|:---------------------------|
+|:------------------|:---------------------------|:------------------------|
 | `DjuService` | `calculate_point_dju`, `calculate_zone_dju` | Contrôle la requête, crée les `DjuCalculation`, consulte et remplit le cache des calculs sur territoire |
 | `TemperatureService` | `find_candidate_stations`, `estimate_daily_temperatures`, `get_municipality_temperatures` | Choisit les stations, lit leurs relevés et estime les températures par IDW |
 | `ZoneService` | `list_public_zones`, `get_zone`, `get_sub_zones`, `create_zoning`, `import_zoning`, `update_zoning`, `delete_zoning` | Lit les territoires, découpe une zone, gère les zonages et vérifie leur propriétaire |
@@ -416,10 +416,10 @@ Le dossier d'analyse décrivait la conception prévue avant l'écriture du code.
 \newpage
 
 | Sujet | Prévu dans le dossier d'analyse | Réalisé | Raison du changement |
-|:-----------|:--------------------------|:------------------------------|:--------------------------|
+|:---------------|:-----------------|:--------------------|:-----------------|
 | Stockage des relevés | Séries de températures lues en Parquet par l'API | Parquet seulement entre les scripts de préparation ; l'API ne lit que PostgreSQL ([-@sec-stockage]) | Une seule source pendant les calculs, avec index et clés étrangères |
 | Cache | Deux niveaux : températures quotidiennes par lieu, puis résultats finaux, pour F1 et F3 | Un seul niveau : résultats des calculs sur territoire ; F1 non stocké ([-@sec-cache]) | Premier niveau trop volumineux, et devenu inutile après la vectorisation ; coordonnées d'un point rarement identiques |
-| Nettoyage des données | Exclusion des stations couvrant moins de 65 % de la période, des doublons à moins de 500 m et des séries constantes sur 30 jours | Valeurs hors de [−50 ; 50] °C vidées puis comblées ; aucune station exclue ([-@sec-manquantes]) | Une station sans relevés est remplacée à l'estimation ; les deux autres contrôles n'ont pas été faits, faute de temps |
+| Nettoyage des données | Exclusion des stations couvrant moins de 65 % de la période, des doublons à moins de 500 m et des séries constantes sur 30 jours | Valeurs hors de \[−50 ; 50\] °C vidées puis comblées ; aucune station exclue ([-@sec-manquantes]) | Une station sans relevés est remplacée à l'estimation ; les deux autres contrôles n'ont pas été faits, faute de temps |
 | Trous de 8 à 30 jours | Régression sur les voisines, avec correction saisonnière optionnelle | Régression sur les voisines seulement ([-@sec-manquantes]) | Les voisines subissent déjà les mêmes variations saisonnières |
 | Qualité des résultats | Rapport détaillé : part de jours originaux, interpolés, spatialisés ou rejetés | `days_with_data` et `observed_ratio` pour chaque période ([-@sec-agregation]) | Deux indicateurs simples, tirés des colonnes `source_tmin` et `source_tmax` |
 | Période demandée | Refus d'une période incompatible avec les données | Période ramenée aux données disponibles, avec un champ `warning` ([-@sec-periode]) | Une requête qui dépasse un peu les données reste utile |
@@ -470,7 +470,7 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 \needspace{8\baselineskip}
 
 | Code | Cas |
-|:---------|:------------------------------------------------------------|
+|:--------------|:--------------------------------------------------------|
 | 400 | Paramètres incohérents : aucun seuil, dates dans le désordre, période sans données, code INSEE inconnu, fichier illisible |
 | 401 | Jeton absent, invalide ou expiré ; identifiants incorrects |
 | 403 | Zonage appartenant à un autre utilisateur |
@@ -487,7 +487,7 @@ Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de 
 \needspace{8\baselineskip}
 
 | Couche testée | Fichier | Tests | Méthode |
-|:----------------------|:---------------------------|------:|:------------------------------|
+|:---------------|:-------------------|--------------:|:---------------------|
 | Objets métier | `test_business_objects.py` | 25 | Données écrites à la main |
 | Services | `test_services.py` | 49 | DAO remplacées par de faux objets |
 | Contrôleurs et routes | `test_api.py` | 38 | Services remplacés, `TestClient` de FastAPI |
@@ -501,14 +501,14 @@ Les 137 tests passent. Le tableau suivant donne la couverture du code, mesurée 
 
 \needspace{9\baselineskip}
 
-| Partie du code | Couverture |
+| Partie du code                                         | Couverture |
 |:-------------------------------------------------------|-----------:|
-| Objets métier | 92 à 100 % |
-| Services | 90 à 99 % |
-| Contrôleurs et schémas | 68 à 100 % |
-| DAO | 19 à 40 % |
-| Total de l'API | 77 % |
-| `qualite_meteo.py` (traitement des valeurs manquantes) | 99 % |
+| Objets métier                                          | 92 à 100 % |
+| Services                                               |  90 à 99 % |
+| Contrôleurs et schémas                                 | 68 à 100 % |
+| DAO                                                    |  19 à 40 % |
+| Total de l'API                                         |       77 % |
+| `qualite_meteo.py` (traitement des valeurs manquantes) |       99 % |
 
 : Couverture des tests
 
@@ -521,7 +521,7 @@ Les tests vérifient que le code fait ce que nous avons prévu, pas que les vale
 Notre API permet de reproduire ces choix : seuil de 17 °C, une station (`number_of_stations = 1`), pas de correction d'altitude, puis somme des DJU mensuels de la saison de chauffe. Nous avons calculé l'année 2024 pour les 96 départements métropolitains avec ces réglages, puis avec les réglages par défaut (3 stations, correction d'altitude). Ce calcul a utilisé le code de l'API sans passer par le cache, pour ne pas y stocker de calculs de test.
 
 | Réglages de l'API | Écart moyen (en valeur absolue) | Départements à moins de 5 % | Corrélation |
-|:---------------------------------|------------:|------------:|------------:|
+|:----------------------------|--------------:|--------------:|--------------:|
 | Proches du SDES (1 station, sans altitude) | 1,8 % | 92 % | 0,99 |
 | Par défaut (3 stations, avec altitude) | 2,6 % | 85 % | 0,98 |
 
@@ -552,7 +552,7 @@ Pour mesurer l'effet de la vectorisation (@sec-vectorisation), nous avons estim�
 Le tableau suivant donne les temps de réponse de l'API, pour un premier calcul puis pour la même requête servie par le cache.
 
 | Requête (DJU de chauffage, pas mensuel sauf mention) | Communes | Premier calcul | Même requête (cache FO1) |
-|:---------------------------------|------------:|------------:|------------:|
+|:----------------------------|--------------:|--------------:|--------------:|
 | F1 : point GPS (Rennes), 2024 | — | 0,1 s | non stocké |
 | F3 : Ille-et-Vilaine, 2024 | 332 | 1,3 s | 0,5 s |
 | F3 : Bretagne, 2024 | 1 202 | 2,0 s | 0,6 s |
@@ -642,10 +642,12 @@ Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par doma
 \begingroup
 \renewcommand{\clearpage}{\vspace{1.5em}}
 
+
+\newpage 
+
 # Références {.unnumbered}
 
 \endgroup
-
 \begingroup
 \small
 \setstretch{1.0}
@@ -690,7 +692,7 @@ Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par doma
 ## Synthèse des routes {#sec-routes}
 
 | Fonct. | Route | Auth. | Paramètres d'entrée | Description |
-|:-----|:------------------------|:---------|:--------------------------|:------------------------|
+|:-------------|:--------------|:-------------|:---------------|:--------------|
 | F1 | `POST /dju/point` | Aucune | `latitude`, `longitude`, `altitude?`, `start_date`, `end_date`, `time_step`, `heating_threshold?`, `cooling_threshold?`, `number_of_stations?` | DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | `type` (`department` \| `region` \| `all`) | Liste des zonages officiels |
 | F2 | `GET /zones/{zone_type}/{zone_id}` | Aucune | `zone_type`, `zone_id` | Détail d'une zone et de ses communes |
