@@ -716,9 +716,11 @@ Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par doma
 
 ### Aziz Yousfi
 
-Au début du projet, j'ai participé à la recherche des sources de données et au premier nettoyage des valeurs manquantes. J'ai ensuite écrit la plupart des objets métier (zones géographiques, stations, relevés, calcul DJU, utilisateur), puis les contrôleurs et les schémas Pydantic des trois groupes de routes. Après la reprise des diagrammes, j'ai relevé les écarts entre le modèle et les DAO et contrôleurs, puis j'ai réécrit le calcul des DJU dans les objets métier (`run()` et `run_for_zone()`) avec leurs tests unitaires.
+Au début du projet, j'ai participé à la recherche des sources de données et à un premier nettoyage des valeurs manquantes. J'ai écrit la plupart des objets métier (zones, stations, relevés, DJU, utilisateur) et les diagrammes de classes et de cas d'utilisation, puis les contrôleurs et les schémas Pydantic des trois groupes de routes. Après la reprise des diagrammes, j'ai relevé les écarts entre le modèle, les DAO et les contrôleurs. En fin de projet, je me suis concentré sur les tests et les cas limites : validation des entrées de l'API, tests des services, limite de 72 octets sur les mots de passe (bcrypt) et correction du comblement des trous pour une station isolée.
 
-La principale difficulté a été de passer d'un calcul jour par jour à un calcul sur des tableaux pandas entiers, tout en gérant les périodes coupées par les dates de la requête et les populations inconnues. Ce travail m'a appris l'intérêt de garder les objets métier indépendants de la base : ils peuvent être testés avec quelques valeurs construites à la main, ce qui rend les erreurs de calcul faciles à repérer.
+La principale difficulté a été de faire concorder des parties écrites séparément : les noms de champs de mes schémas ne correspondaient pas toujours à ceux des services et des DAO. Tester sans base de données a aussi demandé de remplacer les DAO par des objets factices.
+
+J'ai appris à organiser un projet en couches, à valider les entrées avec Pydantic, et que les cas limites ne se découvrent qu'en testant, au fil du développement.
 
 ### Eudes Sterlin
 
