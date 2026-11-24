@@ -3,7 +3,7 @@ flowchart TB
     subgraph api["API DJU (api/src)"]
         pres["Présentation : contrôleurs FastAPI et schémas Pydantic<br/>/dju, /zones, /user, /user/zones · JSON ou CSV"]
         serv["Services : DjuService, TemperatureService,<br/>ZoneService, AuthService"]
-        bo["Objets métier : DjuCalculation, DjuType, DjuResult,<br/>Region, Department, Municipality, Zoning,<br/>MeteoStation, TemperatureReport, User"]
+        bo["Objets métier : DjuCalculation, DjuType, DjuResult,<br/>Region, Department, Municipality, Zoning,<br/>MeteoStation, User"]
         dao["DAO : DjuDao, GeoZoneDao, ZoningDao, UserDao,<br/>MeteoStationDao, TemperatureReportDao · DBConnection"]
         pres --> serv
         serv --> bo

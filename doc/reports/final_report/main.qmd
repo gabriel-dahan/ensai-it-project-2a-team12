@@ -226,6 +226,8 @@ $$
 
 Le nombre $n$ de stations est un paramètre facultatif de la requête (entre 1 et 10, 3 par défaut). Seules les stations qui ont des relevés sur la période sont retenues. Un jour donné, la moyenne n'est faite que sur les stations qui ont une valeur ce jour-là.
 
+Les stations doivent aussi être à moins de 50 km du lieu, le rayon déjà utilisé pour choisir les voisines lors du comblement des trous (@sec-manquantes). Sans cette limite, un point en mer ou à l'étranger recevrait des DJU calculés avec des stations lointaines, qui ne le représentent pas. Si aucune station n'est assez proche, le calcul est refusé ; s'il y en a moins que $n$, le calcul se fait avec celles qui existent et la réponse le signale. Cette limite ne détecte pas tout : un point du Pays basque espagnol, à moins de 50 km de stations françaises, reste calculé. Il faudrait pour cela connaître le contour du territoire.
+
 L'altitude cible est facultative. Si elle est absente, aucune correction n'est appliquée. Si elle est fournie, chaque température de station est corrigée de $-0{,}65$ °C par 100 m d'écart entre le lieu et la station, gradient vertical de l'atmosphère type [@oaci_atmosphere]. Pour une commune, on utilise les coordonnées et l'altitude de la mairie plutôt que du centre géométrique, car la mairie est plus proche de l'endroit où vivent les habitants (à Chamonix, 1 036 m à la mairie contre 1 885 m au centre de la commune).
 
 ### Cache et réutilisation {#sec-cache}
@@ -305,7 +307,7 @@ Le schéma relationnel (`data/init_db.sql`) reprend les entités du domaine. Il 
 
 **Données météo.** La table `temperature_reports` contient un relevé par station et par jour. Seules $T_{\min}$ (colonne `TN` de Météo-France) et $T_{\max}$ (`TX`) sont stockées : la température moyenne mesurée (`TM`) n'est pas utilisée, car la méthode de référence définit la moyenne comme $(T_{\min} + T_{\max}) / 2$, recalculée au moment du calcul. La stocker aurait créé une information redondante. Les colonnes `source_tmin` et `source_tmax` gardent l'origine de chaque valeur.
 
-**Cache des calculs.** La table `dju_types` enregistre une seule fois chaque couple (mode, seuil). La zone d'un calcul est désignée par le couple (`zone_type`, `zone_id`), car elle peut être une région, un département, une commune ou un zonage, c'est-à-dire des lignes de tables différentes. Cela empêche une clé étrangère classique : la cohérence est assurée par le service, qui supprime les calculs d'un zonage modifié.
+**Cache des calculs.** La table `dju_types` enregistre une seule fois chaque couple (mode, seuil). La zone d'un calcul est désignée par le couple (`zone_type`, `zone_id`), où `zone_id` est l'identifiant interne de la ligne et non le code INSEE, car elle peut être une région, un département, une commune ou un zonage, c'est-à-dire des lignes de tables différentes. Cela empêche une clé étrangère classique : la cohérence est assurée par le service, qui supprime les calculs d'un zonage modifié.
 
 ## Vue des cas d'utilisation
 
@@ -317,7 +319,7 @@ Le diagramme des cas d'utilisation reprend les acteurs définis en @sec-acteurs 
 
 Le modèle du domaine structure les objets métier en trois groupes, et les services qui les orchestrent.
 
-Le premier groupe décrit le territoire. `GeographicZone` est une classe abstraite dont héritent `Region`, `Department`, `Municipality` et `Zoning` (@fig-classes-zone). Toutes exposent `get_municipalities()`, ce qui permet de traiter de la même façon une région, un département ou un zonage lors d'un calcul sur un territoire (polymorphisme). Le deuxième groupe décrit les données météo : `MeteoStation` et `TemperatureReport`. Le troisième décrit le calcul (@fig-classes-dju) : un `DjuCalculation` représente une demande, applique un `DjuType` (mode et seuil) et produit une liste de `DjuResult`, un par période. Un `DjuCalculation` ne porte qu'un seul `DjuType` : avec deux seuils, deux calculs sont créés.
+Le premier groupe décrit le territoire. `GeographicZone` est une classe abstraite dont héritent `Region`, `Department`, `Municipality` et `Zoning` (@fig-classes-zone). Toutes exposent `get_municipalities()`, ce qui permet de traiter de la même façon une région, un département ou un zonage lors d'un calcul sur un territoire (polymorphisme). Le deuxième groupe décrit les données météo : `MeteoStation`. Les relevés quotidiens ne sont pas des objets Python : ils sont lus en une requête sous forme de tableau pandas, une ligne par station et par jour, pour que l'estimation soit vectorisée (@sec-vectorisation). Le troisième décrit le calcul (@fig-classes-dju) : un `DjuCalculation` représente une demande, applique un `DjuType` (mode et seuil) et produit une liste de `DjuResult`, un par période. Un `DjuCalculation` ne porte qu'un seul `DjuType` : avec deux seuils, deux calculs sont créés.
 
 ![Modèle du domaine : territoire et utilisateurs](resources/diagrams_final/fig-classes-zone.png){#fig-classes-zone width="80%" fig-pos="H"}
 
@@ -352,7 +354,7 @@ Avant tout calcul DJU, le système estime une série quotidienne de température
 
 **Entrées** : un ou plusieurs lieux (latitude, longitude, altitude ou rien), la période et le nombre $n$ de stations. **Sortie** : deux tableaux avec une ligne par jour et une colonne par lieu, l'un pour la température moyenne estimée, l'autre indiquant si la valeur ne repose que sur des mesures observées.
 
-`find_candidate_stations()` trie les stations par distance et retient pour chaque lieu les $n$ plus proches. Les relevés de toutes les stations retenues sont lus en une seule requête SQL, même si une station sert à plusieurs lieux. Une station qui n'a aucun relevé sur la période est écartée et remplacée par la suivante, jusqu'à ce que chaque lieu ait $n$ stations avec des données. `estimate_daily_temperatures()` applique ensuite la correction d'altitude et la pondération inverse à la distance.
+`find_candidate_stations()` trie les stations par distance et retient pour chaque lieu les $n$ plus proches, parmi celles situées à moins de 50 km. Les relevés de toutes les stations retenues sont lus en une seule requête SQL, même si une station sert à plusieurs lieux. Une station qui n'a aucun relevé sur la période est écartée et remplacée par la suivante, jusqu'à ce que chaque lieu ait $n$ stations avec des données. `estimate_daily_temperatures()` applique ensuite la correction d'altitude et la pondération inverse à la distance.
 
 ![Estimation des températures locales](resources/diagrams_final/fig-act-temp.png){#fig-act-temp width="85%" fig-pos="H"}
 
@@ -362,15 +364,15 @@ La requête `POST /dju/point` fournit la latitude, la longitude, éventuellement
 
 La validation se fait en deux niveaux. Le schéma Pydantic `DjuPointRequest` contrôle automatiquement le format : latitude entre $-90$ et $90$, longitude entre $-180$ et $180$, dates valides, nombre de stations entre 1 et 10, pas de temps parmi `day`, `week`, `month` et `year`. Une erreur de format donne une réponse 422. Le service contrôle ensuite la cohérence entre les paramètres : au moins un seuil, date de début avant la date de fin, période qui recoupe les données disponibles. Une incohérence donne une réponse 400.
 
-`DjuService.calculate_point_dju()` estime ensuite les températures du point une seule fois, puis crée un `DjuCalculation` par seuil fourni et appelle `run()`. Aucun résultat n'est stocké. Les diagrammes d'activité et de séquence de F1 sont en annexe.
+`DjuService.calculate_point_dju()` estime ensuite les températures du point une seule fois, puis crée un `DjuCalculation` par seuil fourni et appelle `run()`. Aucun résultat n'est stocké. La réponse liste les stations utilisées (code, nom, position, altitude et distance au point), pour que l'utilisateur puisse juger de la représentativité du résultat. Un champ `warning` signale une période raccourcie aux données disponibles ou un nombre de stations proches inférieur à celui demandé ; sans aucune station à moins de 50 km, la réponse est une erreur 404. Les diagrammes d'activité et de séquence de F1 sont en annexe.
 
 ## F2 — Consultation des zonages officiels
 
-Tout client peut lister les régions, les départements ou les deux avec la route `GET /zones?type=...`, traitée par `list_public_zones()` de `ZoneService`. Cette liste est volontairement légère : elle ne contient pas les communes, qui seraient près de 35 000 pour la France entière. Le détail d'une zone, avec ses communes, est donné par `GET /zones/{zone_type}/{zone_id}`. Ces routes permettent de connaître les identifiants des zones avant de lancer un calcul F3. Les diagrammes correspondants figurent en annexe.
+Tout client peut lister les régions, les départements ou les deux avec la route `GET /zones?type=...`, traitée par `list_public_zones()` de `ZoneService`. Cette liste est volontairement légère : elle ne contient pas les communes, qui seraient près de 35 000 pour la France entière. Le détail d'une zone, avec ses communes, est donné par `GET /zones/{zone_type}/{insee_code}`, par exemple `GET /zones/department/22` pour les Côtes-d'Armor. Les zones sont toujours désignées par leur code INSEE : l'identifiant interne de la base (21 pour les Côtes-d'Armor) n'est jamais exposé, et ne sert qu'aux jointures et à la clé du cache. Ces routes permettent de connaître les codes des zones avant de lancer un calcul F3. Les diagrammes correspondants figurent en annexe.
 
 ## F3 — Calcul d'un DJU sur un territoire
 
-La requête `POST /dju/zone` désigne une zone par `zone_type` et `zone_id`, avec les mêmes paramètres qu'en F1, un niveau d'agrégation (`zone`, `department` ou `municipality`) et l'indicateur `use_altitude`. Les zonages officiels sont publics ; un zonage personnalisé exige un jeton, et que l'appelant en soit le propriétaire (401 sans jeton, 403 pour un autre utilisateur, 404 si la zone n'existe pas).
+La requête `POST /dju/zone` désigne une zone par `zone_type` et `zone_code` : le code INSEE pour une région ou un département (« 53 », « 2A »), l'identifiant du zonage pour un zonage personnalisé. Elle comprend les mêmes paramètres qu'en F1, un niveau d'agrégation (`zone`, `department` ou `municipality`) et l'indicateur `use_altitude`. Les zonages officiels sont publics ; un zonage personnalisé exige un jeton, et que l'appelant en soit le propriétaire (401 sans jeton, 403 pour un autre utilisateur, 404 si la zone n'existe pas).
 
 Le traitement se fait en deux temps, comme le montre la figure suivante. Le service découpe d'abord la zone en sous-zones selon le niveau d'agrégation, et cherche pour chaque sous-zone et chaque seuil un calcul déjà stocké. Il ne garde de côté que les calculs absents. Ensuite seulement, il estime en une fois les températures de toutes les communes de ces calculs : une région découpée par département ne lit donc les relevés qu'une seule fois.
 
@@ -402,8 +404,8 @@ La modification (`PATCH`) peut changer la description, ajouter et retirer des co
 |:-------------|:-------------|:-------------|:----------------|:-------------|
 | F1 | `POST /dju/point` | Aucune | `latitude`, `longitude`, `altitude?`, `start_date`, `end_date`, `time_step`, `heating_threshold?`, `cooling_threshold?`, `number_of_stations?` | DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | `type` (`department` \| `region` \| `all`) | Liste des zonages officiels |
-| F2 | `GET /zones/{zone_type}/{zone_id}` | Aucune | `zone_type`, `zone_id` | Détail d'une zone et de ses communes |
-| F3 | `POST /dju/zone` | Optionnelle¹ | `zone_type`, `zone_id`, `aggregation_level?`, mêmes paramètres qu'en F1, `use_altitude?` | DJU sur un territoire |
+| F2 | `GET /zones/{zone_type}/{insee_code}` | Aucune | `zone_type`, `insee_code` | Détail d'une zone et de ses communes |
+| F3 | `POST /dju/zone` | Optionnelle¹ | `zone_type`, `zone_code`, `aggregation_level?`, mêmes paramètres qu'en F1, `use_altitude?` | DJU sur un territoire |
 | F4 | `POST /user/register` | Aucune | `username`, `password` | Création de compte |
 | F4 | `POST /user/login` | Aucune | `username`, `password` | Connexion, renvoie un jeton |
 | F4 | `GET /user/zones` | Requise | — (jeton) | Zonages de l'utilisateur |
@@ -438,7 +440,7 @@ weight_total = (has_value * weights).sum(axis=1)
 means[key] = weighted_sum / weight_total                   # NaN si aucune station ce jour-là
 ```
 
-Le masque `has_value` règle le cas des jours où une station n'a pas de valeur : son poids est simplement retiré du dénominateur ce jour-là. La distance minimale de 10 m évite une division par zéro quand le lieu est exactement sur une station. Les distances sont elles aussi calculées par une version vectorisée de la formule d'Haversine.
+Le masque `has_value` règle le cas des jours où une station n'a pas de valeur : son poids est simplement retiré du dénominateur ce jour-là. La distance minimale de 10 m évite une division par zéro quand le lieu est exactement sur une station. Les distances sont calculées par une seule fonction, `haversine_km`, écrite avec numpy : elle donne aussi bien la distance entre deux points (`MeteoStation.distance_to()`, utilisée pour renvoyer la distance des stations) que la distance d'un lieu à toutes les stations en une opération.
 
 ### Une agrégation temporelle calendaire
 
@@ -457,7 +459,7 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 | 400 | Incohérence entre paramètres : aucun seuil, dates dans le désordre, période sans données, code INSEE inconnu, fichier illisible |
 | 401 | Jeton absent, invalide ou expiré ; identifiants incorrects |
 | 403 | Zonage appartenant à un autre utilisateur |
-| 404 | Zone ou zonage introuvable ; aucune station près du point |
+| 404 | Zone ou zonage introuvable ; aucune station à moins de 50 km du point |
 | 409 | Nom d'utilisateur déjà pris |
 | 422 | Format de requête invalide, contrôlé par Pydantic |
 
@@ -474,7 +476,7 @@ Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de 
 
 Les trois premiers fichiers sont dans `api/test/`, le dernier dans `data/`.
 
-Les tests des objets métier vérifient la formule du DJU (valeur jamais négative, chauffage et climatisation), l'agrégation par semaine, mois et année avec des périodes coupées, la pondération par la population (y compris des populations inconnues), la distance d'Haversine entre Paris et Lyon et la correction d'altitude. Pour les services, les DAO sont remplacées par de faux objets qui renvoient des données fixes : cela permet de tester l'estimation IDW sur deux stations, le remplacement d'une station sans relevés, l'utilisation du cache F3, ou encore les codes d'erreur 400, 401, 403, 404 et 409. Les tests de routes vérifient les codes HTTP, la validation Pydantic (422) et le format CSV. Les tests des scripts de données vérifient chaque palier du comblement et le chargement en base sur une fausse connexion.
+Les tests des objets métier vérifient la formule du DJU (valeur jamais négative, chauffage et climatisation), l'agrégation par semaine, mois et année avec des périodes coupées, la pondération par la population (y compris des populations inconnues), et la distance d'Haversine entre Paris et Lyon, sur deux points comme sur un tableau. Pour les services, les DAO sont remplacées par de faux objets qui renvoient des données fixes : cela permet de tester l'estimation IDW sur deux stations, la correction d'altitude, le remplacement d'une station sans relevés, l'utilisation du cache F3, ou encore les codes d'erreur 400, 401, 403, 404 et 409. Les tests de routes vérifient les codes HTTP, la validation Pydantic (422) et le format CSV. Les tests des scripts de données vérifient chaque palier du comblement et le chargement en base sur une fausse connexion.
 
 Les 118 tests passent. La couverture de code, mesurée avec `coverage`, est la suivante :
 
@@ -542,12 +544,12 @@ Le premier appel après le démarrage de l'API est plus lent (environ 10 s) : il
 
 L'API se lance depuis `api/src` avec `python main.py`, après avoir renseigné le fichier `.env` (connexion PostgreSQL et clé `JWT_SECRET`). La documentation interactive générée par FastAPI est alors disponible sur `http://localhost:5001/docs` : elle décrit chaque route, ses paramètres et ses réponses, et permet de les essayer directement.
 
-Par exemple, la requête suivante demande les DJU de chauffage mensuels de chaque département de la Bretagne en 2024, avec un seuil de 18 °C. L'identifiant de la région (8) est obtenu au préalable avec `GET /zones?type=region` :
+Par exemple, la requête suivante demande les DJU de chauffage mensuels de chaque département de la Bretagne en 2024, avec un seuil de 18 °C. Le code INSEE de la région (53) est donné par `GET /zones?type=region` :
 
 ``` json
 POST /dju/zone
 {
-  "zone_type": "region", "zone_id": 8, "aggregation_level": "department",
+  "zone_type": "region", "zone_code": "53", "aggregation_level": "department",
   "start_date": "2024-01-01", "end_date": "2024-12-31",
   "heating_threshold": 18, "time_step": "month"
 }
@@ -558,14 +560,14 @@ La réponse contient une entrée par département et, pour chaque mode demandé,
 ``` json
 {
   "zones": [
-    { "zone_type": "department", "zone_id": 21, "name": "Côtes-d'Armor",
+    { "zone_type": "department", "zone_code": "22", "name": "Côtes-d'Armor",
       "results": { "heating": [
         { "period_start": "2024-01-01", "period_end": "2024-01-31",
           "value": 363.28, "days_with_data": 31, "observed_ratio": 1.0 },
         ...
         { "period_start": "2024-12-01", "period_end": "2024-12-31",
           "value": 311.24, "days_with_data": 31, "observed_ratio": 1.0 } ] } },
-    { "zone_type": "department", "zone_id": 28, "name": "Finistère", ... },
+    { "zone_type": "department", "zone_code": "29", "name": "Finistère", ... },
     ... ],
   "warning": null
 }
@@ -661,9 +663,11 @@ La difficulté principale a été de définir la clé d'un calcul stocké : il f
 
 ### Gabriel Dahan
 
-J'ai mis en place la structure du dépôt, le gabarit des rapports, la connexion à la base et le suivi hebdomadaire. Pour le dossier d'analyse, j'ai produit plusieurs diagrammes de séquence et d'activité, puis converti l'ensemble des diagrammes en images et les ai intégrés au rapport. J'ai ensuite écrit la DAO des utilisateurs, complété le script de création des tables et corrigé le dossier d'analyse à partir des remarques du tuteur. Dans la dernière phase, j'ai rendu l'API exécutable (gestion commune des erreurs, enregistrement des routes), puis implémenté les services et les routes de toutes les fonctionnalités et aligné la couche DAO sur le nouveau modèle.
+Sur le plan technique, j'ai mis en place la structure du dépôt, le gabarit des rapports, la connexion à la base et le suivi hebdomadaire. Pour le dossier d'analyse, j'ai produit plusieurs diagrammes de séquence et d'activité, puis converti l'ensemble des diagrammes en images et les ai intégrés au rapport. J'ai ensuite écrit la DAO des utilisateurs, complété le script de création des tables et corrigé le dossier d'analyse à partir des remarques du tuteur. Dans la dernière phase, j'ai rendu l'API exécutable (gestion commune des erreurs, enregistrement des routes), puis implémenté les services et les routes de toutes les fonctionnalités et aligné la couche DAO sur le nouveau modèle.
 
-La difficulté principale a été d'intégrer des parties écrites séparément : les noms de champs attendus par les services ne correspondaient pas toujours à ceux des schémas ou des DAO. Le modèle commun réécrit après les remarques du tuteur a beaucoup simplifié ce travail. J'en retiens qu'un modèle partagé et précis fait gagner plus de temps qu'il n'en coûte, et que l'injection des DAO dans les services rend les tests beaucoup plus simples.
+La difficulté principale a été d'intégrer des parties écrites séparément : les noms de champs attendus par les services ne correspondaient pas toujours à ceux des schémas ou des DAO. Le modèle commun réécrit après les remarques du tuteur a beaucoup simplifié ce travail.
+
+Sur le plan personnel, j'ai appris ce qu'étaient des DJU, ainsi que des méthodes de calcul géographique liés aux températures (par exemple lorsqu'il fallait interpoler entre plusieurs stations météo espacées). Ce projet m'a permis de découvrir l'organisation d'un projet informatique en pratique dans un groupe, en particulier avec la conception de diagrammes pour avoir une vue de ce qui sera produit a priori.
 
 ### Gwenaël Lassalle
 

@@ -35,7 +35,7 @@ class UserDao(metaclass=Singleton):
     def create(self, user: User) -> User | None:
         """Enregistre l'utilisateur et renseigne son id ; None si le nom est déjà pris."""
         if user.id is not None:
-            raise ValueError("L'utilisateur a déjà un id : utiliser update()")
+            raise ValueError("L'utilisateur est déjà enregistré")
 
         try:
             with DBConnection().connection as connection:
@@ -54,33 +54,6 @@ class UserDao(metaclass=Singleton):
 
         user.id = res["id"]
         return user
-
-    def update(self, user: User) -> bool:
-        """Met à jour le nom et le mot de passe ; True si une ligne a changé."""
-        if user.id is None:
-            return False
-
-        try:
-            with DBConnection().connection as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "UPDATE users SET username = %s, password = %s WHERE id = %s",
-                        (user.username, user.password_hash, user.id),
-                    )
-                    updated = cursor.rowcount == 1
-        except psycopg2.IntegrityError:
-            return False
-
-        return updated
-
-    def delete(self, user_id: int) -> bool:
-        """Supprime l'utilisateur ; True si une ligne a été supprimée."""
-        with DBConnection().connection as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-                deleted = cursor.rowcount == 1
-
-        return deleted
 
     @staticmethod
     def _to_user(row: dict) -> User:

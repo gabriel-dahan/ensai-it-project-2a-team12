@@ -34,7 +34,7 @@ def redirect_to_docs():
 
 @app.get("/health", tags=["Misc"])
 def health_check():
-    """Indique que l'API tourne."""
+    """Check que l'API tourne."""
     return {"status": "ok"}
 
 

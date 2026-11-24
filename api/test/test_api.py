@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import main
 from business_object.dju import DjuCalculation, DjuResult, DjuType
 from business_object.geo_zone import Department, Municipality, Region, Zoning
+from business_object.meteo_station import MeteoStation
 from business_object.user import User
 from controllers import dju_controller, user_controller, zone_controller
 from controllers.dependencies import get_current_user
@@ -28,7 +29,7 @@ POINT_BODY = {
 
 ZONE_BODY = {
     "zone_type": "region",
-    "zone_id": 1,
+    "zone_code": "53",
     "aggregation_level": "department",
     "start_date": "2024-01-01",
     "end_date": "2024-01-01",
@@ -59,6 +60,18 @@ def make_calculation(mode, zone=None, value=5.0):
     )
 
 
+# Station à 0,1° de latitude au nord du point de POINT_BODY, soit environ 11,1 km
+STATION = MeteoStation(id=1, station_code="35281001", name="RENNES-ST JACQUES",
+                       latitude=48.2, longitude=-1.7, altitude=36.0)
+
+
+def make_point_calculation(mode, value, stations=(STATION,)):
+    calculation = make_calculation(mode, value=value)
+    calculation.latitude, calculation.longitude = POINT_BODY["latitude"], POINT_BODY["longitude"]
+    calculation.candidate_stations = list(stations)
+    return calculation
+
+
 def make_municipality(code, name):
     return Municipality(id=None, name=name, insee_code=code, latitude=48.0, longitude=-1.0)
 
@@ -71,13 +84,14 @@ def make_zoning(name="Mon zonage", codes=("35238",)):
 
 
 class FakeDjuService:
-    def __init__(self):
+    def __init__(self, stations=(STATION,) * 3):
         self.calls = []
+        self.stations = stations
 
     def calculate_point_dju(self, request):
         self.calls.append(request)
-        return {"heating": make_calculation("heating", value=10.0),
-                "cooling": make_calculation("cooling", value=0.0)}
+        return {"heating": make_point_calculation("heating", 10.0, self.stations),
+                "cooling": make_point_calculation("cooling", 0.0, self.stations)}
 
     def calculate_zone_dju(self, request, user):
         self.calls.append((request, user))
@@ -100,10 +114,11 @@ class FakeZoneService:
         return [Region(id=1, name="Bretagne", insee_code="53"),
                 Department(id=35, name="Ille-et-Vilaine", insee_code="35", region_id=1)]
 
-    def get_zone(self, zone_type, zone_id, user=None):
-        if zone_id == 999:
+    def get_zone(self, zone_type, zone_code, user=None):
+        self.calls.append(("get", zone_type, zone_code))
+        if zone_code == "999":
             raise ServiceError("Zone introuvable", status_code=404)
-        dep = Department(id=zone_id, name="Ille-et-Vilaine", insee_code="35")
+        dep = Department(id=34, name="Ille-et-Vilaine", insee_code=zone_code)
         dep.add_municipality(make_municipality("35238", "Rennes"))
         return dep
 
@@ -226,6 +241,35 @@ def test_point_warning_when_period_is_cut(client, dju_service):
     # FakeDjuService calcule du 2024-01-01 au 2024-01-01 alors que POINT_BODY va jusqu'au 2024-01-02
     response = client.post("/dju/point", json=POINT_BODY)
     assert "2024-01-02" in response.json()["warning"]
+    assert "station" not in response.json()["warning"]  # les 3 stations demandées sont trouvées
+
+
+def test_point_returns_stations_used(client, dju_service):
+    stations = client.post("/dju/point", json=POINT_BODY).json()["stations"]
+    assert len(stations) == 3
+    assert stations[0] == {
+        "station_code": "35281001",
+        "name": "RENNES-ST JACQUES",
+        "latitude": 48.2,
+        "longitude": -1.7,
+        "altitude": 36.0,
+        "distance_km": 11.1,
+    }
+
+
+def test_point_warning_when_too_few_stations(client, monkeypatch):
+    monkeypatch.setattr(dju_controller, "service", FakeDjuService(stations=(STATION,)))
+    body = {**POINT_BODY, "end_date": "2024-01-01", "number_of_stations": 4}
+    warning = client.post("/dju/point", json=body).json()["warning"]
+    assert warning == (
+        "Seulement 1 station(s) avec des relevés à moins de 50 km du point, au lieu des 4 demandées."
+    )
+
+
+def test_zone_code_accepts_a_number(client, dju_service):
+    response = client.post("/dju/zone", json={**ZONE_BODY, "zone_code": 53})
+    assert response.status_code == 200
+    assert dju_service.calls[0][0].zone_code == "53"
 
 
 def test_zone_no_warning_when_period_is_complete(client, dju_service):
@@ -238,8 +282,8 @@ def test_point_csv(client, dju_service):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     lines = response.text.strip().splitlines()
-    assert lines[0] == "zone,mode,period_start,period_end,value,days_with_data,observed_ratio"
-    assert lines[1] == "point,heating,2024-01-01,2024-01-01,10.0,1,1.0"
+    assert lines[0] == "zone,zone_code,mode,period_start,period_end,value,days_with_data,observed_ratio"
+    assert lines[1] == "point,,heating,2024-01-01,2024-01-01,10.0,1,1.0"
     assert len(lines) == 3
 
 
@@ -254,7 +298,7 @@ def test_zone_json_several_sub_zones(client, dju_service):
     zones = response.json()["zones"]
     assert [z["name"] for z in zones] == ["Ille-et-Vilaine", "Finistère"]
     assert zones[0]["zone_type"] == "department"
-    assert zones[0]["zone_id"] == 35
+    assert zones[0]["zone_code"] == "35"
     assert set(zones[0]["results"]) == {"heating", "cooling"}
     assert zones[1]["results"]["heating"][0]["value"] == 7.0
     request, user = dju_service.calls[0]
@@ -267,7 +311,7 @@ def test_zone_csv(client, dju_service):
     response = client.post("/dju/zone?format=csv", json=ZONE_BODY)
     lines = response.text.strip().splitlines()
     assert len(lines) == 5
-    assert lines[3].startswith("Finistère,heating,")
+    assert lines[3].startswith("Finistère,29,heating,")
 
 
 def test_service_error_becomes_http_error(client, monkeypatch):
@@ -288,8 +332,8 @@ def test_list_zones(client, zone_service):
     response = client.get("/zones?type=all")
     assert response.status_code == 200
     assert response.json() == [
-        {"id": 1, "name": "Bretagne", "zone_type": "region", "insee_code": "53"},
-        {"id": 35, "name": "Ille-et-Vilaine", "zone_type": "department", "insee_code": "35"},
+        {"insee_code": "53", "name": "Bretagne", "zone_type": "region"},
+        {"insee_code": "35", "name": "Ille-et-Vilaine", "zone_type": "department"},
     ]
     assert zone_service.calls == [("list", "all")]
 
@@ -302,6 +346,8 @@ def test_zone_detail(client, zone_service):
     response = client.get("/zones/department/35")
     assert response.status_code == 200
     body = response.json()
+    assert zone_service.calls == [("get", "department", "35")]  # code INSEE, pas l'id interne
+    assert body["insee_code"] == "35"
     assert body["name"] == "Ille-et-Vilaine"
     assert body["municipalities"] == [{"insee_code": "35238", "name": "Rennes"}]
 

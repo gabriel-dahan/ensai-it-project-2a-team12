@@ -7,7 +7,7 @@ from business_object.user import User
 from dao.dju_dao import DjuDao
 from schema.dju_schema import DjuPointRequest, DjuZoneRequest
 from service.errors import ServiceError
-from service.temperature_service import TemperatureService
+from service.temperature_service import MAX_DISTANCE_KM, TemperatureService
 from service.zone_service import ZoneService
 
 POINT = "point"  # nom du lieu dans les tableaux de températures d'un calcul ponctuel
@@ -57,7 +57,11 @@ class DjuService:
             locations, request.number_of_stations, start_date, end_date
         )
         if not stations[POINT]:
-            raise ServiceError("Aucune station météo n'a de relevés près de ce point sur la période.", 404)
+            raise ServiceError(
+                f"Aucune station météo n'a de relevés à moins de {MAX_DISTANCE_KM:g} km de ce point "
+                "sur la période : le point est sans doute en mer ou hors de France.",
+                404,
+            )
 
         # Les températures ne dépendent pas du seuil : on les estime une seule fois
         means, observed = self.temperature_service.estimate_daily_temperatures(
@@ -86,7 +90,7 @@ class DjuService:
     def calculate_zone_dju(self, request: DjuZoneRequest, user: User | None) -> list[DjuCalculation]:
         """Un calcul par sous-zone et par seuil, relu du cache ou calculé puis enregistré."""
         thresholds, start_date, end_date = self._check_request(request)
-        zone = self.zone_service.get_zone(request.zone_type, request.zone_id, user)
+        zone = self.zone_service.get_zone(request.zone_type, request.zone_code, user)
 
         # Un type de DJU par seuil, cherché (ou créé) une seule fois
         dju_types = {

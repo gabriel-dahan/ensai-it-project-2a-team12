@@ -3,19 +3,22 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
-from math import asin, cos, radians, sin, sqrt
 from typing import ClassVar
+
+import numpy as np
 
 EARTH_RADIUS_KM = 6371.0
 
 
-def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distance en km entre deux points GPS (formule de Haversine)."""
-    rlat1, rlon1, rlat2, rlon2 = map(radians, [lat1, lon1, lat2, lon2])
-    d_lat = rlat2 - rlat1
-    d_lon = rlon2 - rlon1
-    a = sin(d_lat / 2) ** 2 + cos(rlat1) * cos(rlat2) * sin(d_lon / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * asin(sqrt(a))
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Distance en km entre des points GPS (formule de Haversine).
+
+    Accepte des nombres ou des tableaux numpy : TemperatureService s'en sert pour
+    calculer en une fois la distance d'un lieu à toutes les stations.
+    """
+    lat1, lon1, lat2, lon2 = map(np.radians, (lat1, lon1, lat2, lon2))
+    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
 @dataclass
@@ -72,10 +75,6 @@ class Municipality(GeographicZone):
 
     def get_municipalities(self) -> list["Municipality"]:
         return [self]
-
-    def distance_to(self, lat: float, lon: float) -> float:
-        """Distance en km jusqu'au point donné."""
-        return haversine_km(self.latitude, self.longitude, lat, lon)
 
 
 @dataclass

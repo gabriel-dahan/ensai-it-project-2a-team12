@@ -35,14 +35,21 @@ class ZoneService:
         """Zonages de l'utilisateur."""
         return self.zoning_dao.find_by_user(user.id)
 
-    def get_zone(self, zone_type: str, zone_id: int, user: User | None = None) -> GeographicZone:
-        """Zone avec ses communes ; 404 si absente, 401/403 pour un zonage."""
+    def get_zone(self, zone_type: str, zone_code: str, user: User | None = None) -> GeographicZone:
+        """Zone avec ses communes ; 404 si absente, 401/403 pour un zonage.
+
+        Une région ou un département est désigné par son code INSEE (« 53 », « 2A »),
+        un zonage personnel par son identifiant.
+        """
+        zone_code = str(zone_code).strip().upper()
         if zone_type == "region":
-            zone = self.zone_dao.get_region_by_id(zone_id, with_municipalities=True)
+            zone = self.zone_dao.get_region_by_insee(zone_code.zfill(2), with_municipalities=True)
         elif zone_type == "department":
-            zone = self.zone_dao.get_department_by_id(zone_id, with_municipalities=True)
+            zone = self.zone_dao.get_department_by_insee(zone_code.zfill(2), with_municipalities=True)
         elif zone_type == "zoning":
-            return self._get_owned_zoning(user, zone_id)
+            if not zone_code.isdigit():
+                raise ServiceError("L'identifiant d'un zonage est un nombre entier.", 400)
+            return self._get_owned_zoning(user, int(zone_code))
         else:
             raise ServiceError(f"Type de zone inconnu : {zone_type}.", 400)
         if zone is None:

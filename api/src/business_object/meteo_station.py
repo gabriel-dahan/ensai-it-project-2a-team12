@@ -16,4 +16,4 @@ class MeteoStation:
 
     def distance_to(self, lat: float, lon: float) -> float:
         """Distance en km jusqu'au point donné."""
-        return haversine_km(self.latitude, self.longitude, lat, lon)
+        return float(haversine_km(self.latitude, self.longitude, lat, lon))
