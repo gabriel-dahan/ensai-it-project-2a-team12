@@ -423,6 +423,29 @@ La modification (`PATCH`) peut changer la description, ajouter et retirer des co
 
 ¹ Authentification obligatoire lorsque la zone ciblée est un zonage personnalisé. Au moins un des deux seuils est requis pour F1 et F3.
 
+## Évolutions depuis le dossier d'analyse {#sec-evolutions}
+
+Le dossier d'analyse décrivait la conception prévue avant l'écriture du code. Pendant le développement, plusieurs choix ont été revus, soit parce qu'une solution plus simple répondait au même besoin, soit pour tenir compte des remarques du tuteur. Le tableau ci-dessous rassemble ces changements ; chacun est détaillé dans la section indiquée.
+
+| Sujet | Prévu dans le dossier d'analyse | Réalisé | Raison du changement |
+|:-----------|:--------------------------|:------------------------------|:--------------------------|
+| Stockage des relevés | Séries de températures lues en Parquet par l'API | Parquet seulement entre les scripts de préparation ; l'API ne lit que PostgreSQL (1.4.2) | Une seule source pendant les calculs, index et clés étrangères |
+| Cache | Deux niveaux : températures quotidiennes par lieu, puis résultats finaux, pour F1 et F3 | Un seul niveau : résultats finaux des calculs sur territoire ; F1 non stocké (1.4.4) | Volume trop élevé du premier niveau, devenu inutile après la vectorisation ; coordonnées d'un point rarement identiques |
+| Nettoyage des données | Exclusion des stations couvrant moins de 65 % de la période, des doublons à moins de 500 m et des séries constantes sur 30 jours | Valeurs hors de [−50 ; 50] °C vidées puis comblées ; aucune station exclue (1.5) | Une station sans relevés est remplacée à l'estimation, et chaque jour n'utilise que les stations qui ont une valeur |
+| Trous de 8 à 30 jours | Régression sur les voisines, avec correction saisonnière optionnelle | Régression sur les voisines seulement (1.5) | Les stations voisines subissent déjà les mêmes variations saisonnières |
+| Qualité des résultats | Rapport détaillé : part de jours originaux, interpolés, spatialisés ou rejetés | `days_with_data` et `observed_ratio` pour chaque période (3.1.2) | Deux indicateurs simples, calculés à partir des colonnes `source_tmin` et `source_tmax` |
+| Période demandée | Refus d'une période incompatible avec les données | Période ramenée aux données disponibles, avec un champ `warning` (1.4.5) | Une requête qui dépasse légèrement les données reste utile |
+| Paramètres de calcul | Pas quotidien, mensuel ou annuel ; $n$ facultatif | Pas hebdomadaire ajouté ; $n$ entre 1 et 10 ; niveau d'agrégation et `use_altitude` pour F3 (2.9) | Découper une région par département en une requête ; borner le coût d'un calcul |
+| Zonages officiels (F2) | Une route de liste, avec les communes | Une liste légère, plus une route de détail par zone (2.8) | Éviter de renvoyer près de 35 000 communes à chaque appel |
+| Comptes | Session après connexion | Jeton JWT valable 24 h, non stocké en base (1.4.1) | Pas de table de sessions à gérer |
+| Import (FO3) | Envoi d'un fichier CSV ou JSON | Contenu du fichier envoyé comme texte dans un corps JSON (2.10) | Évite une dépendance supplémentaire pour l'envoi de fichiers |
+| Modèle du domaine | Calculs rattachés à l'utilisateur qui les demande | Calculs indépendants des utilisateurs (2.4) | Un calcul stocké sert à tous ceux qui posent la même question |
+| Diagrammes | Première version : libellés en anglais, lien peu clair entre les activités et les méthodes des classes | Réécrits en français, avec les noms du code, les entrées, les sorties et les méthodes appelées (1.6) | Remarques du tuteur sur la cohérence de la modélisation |
+
+: Principales évolutions entre le dossier d'analyse et la version finale
+
+Ces changements n'ont retiré aucune fonctionnalité du cahier des charges. Ils ont surtout simplifié l'application : moins de données stockées, moins de règles de nettoyage, et des diagrammes qui décrivent exactement le code.
+
 # Réalisation et validation
 
 Cette partie présente les points du code qui ont demandé le plus de réflexion, la stratégie de test, l'utilisation de l'API et ses limites.
