@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TimeStep = Literal["day", "week", "month", "year"]
 AggregationLevel = Literal["zone", "department", "municipality"]
@@ -27,8 +27,14 @@ class DjuPointRequest(BaseModel):
 class DjuZoneRequest(BaseModel):
     """Paramètres d'un calcul de DJU sur un territoire (F3)."""
 
+    model_config = ConfigDict(coerce_numbers_to_str=True)  # accepte 35 comme "35"
+
     zone_type: Literal["department", "region", "zoning"]
-    zone_id: int
+    zone_code: str = Field(
+        ...,
+        description="Code INSEE de la région ou du département (ex. « 53 », « 2A »), "
+        "ou identifiant du zonage personnel",
+    )
     aggregation_level: AggregationLevel = "zone"
     start_date: date
     end_date: date
@@ -49,18 +55,38 @@ class DjuResultItem(BaseModel):
     observed_ratio: float
 
 
+class StationItem(BaseModel):
+    """Station météo utilisée pour estimer les températures d'un point."""
+
+    station_code: str
+    name: str | None
+    latitude: float
+    longitude: float
+    altitude: float | None
+    distance_km: float
+
+
 class DjuResponse(BaseModel):
     """Résultats d'un point, par mode ("heating" et/ou "cooling")."""
 
     results: dict[str, list[DjuResultItem]]
-    warning: str | None = Field(default=None, description="Présent si la période a été raccourcie")
+    stations: list[StationItem] = Field(
+        default_factory=list, description="Stations utilisées, de la plus proche à la plus éloignée"
+    )
+    warning: str | None = Field(
+        default=None,
+        description="Présent si la période a été raccourcie ou si moins de stations que demandé "
+        "sont assez proches",
+    )
 
 
 class DjuZoneResult(BaseModel):
     """Résultats d'une sous-zone, par mode."""
 
     zone_type: str
-    zone_id: int | None
+    zone_code: str | None = Field(
+        description="Code INSEE (région, département, commune) ou identifiant du zonage"
+    )
     name: str
     results: dict[str, list[DjuResultItem]]
 

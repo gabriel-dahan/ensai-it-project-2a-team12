@@ -11,7 +11,7 @@ Project carried out by Team 12 as part of the second-year IT project at ENSAI.
 | Id | Feature | Route |
 |----|---------|-------|
 | F1 | DJU at a GPS point (latitude, longitude, optional altitude) | `POST /dju/point` |
-| F2 | List of regions and departments, and the municipalities of each one | `GET /zones`, `GET /zones/{type}/{id}` |
+| F2 | List of regions and departments, and the municipalities of each one | `GET /zones`, `GET /zones/{type}/{insee_code}` |
 | F3 | DJU over a department, a region or a personal zoning | `POST /dju/zone` |
 | F4 | Create, list, edit and delete personal zonings (lists of municipalities) | `/user/zones` |
 | FO3 | Import a zoning from a CSV or JSON file | `POST /user/zones/import` |

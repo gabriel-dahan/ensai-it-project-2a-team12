@@ -1,4 +1,3 @@
-from business_object.geo_zone import haversine_km
 from business_object.meteo_station import MeteoStation
 from dao.db_connection import DBConnection
 from utils.singleton import Singleton
@@ -33,23 +32,3 @@ class MeteoStationDao(metaclass=Singleton):
                 for row in rows
             ]
         return list(self._stations)
-
-    def get_station_by_id(self, station_id: int) -> MeteoStation | None:
-        """Renvoie la station de cet id, ou None."""
-        for station in self.get_all_stations():
-            if station.id == station_id:
-                return station
-        return None
-
-    def get_station_by_code(self, station_code: str) -> MeteoStation | None:
-        """Renvoie la station de ce code, ou None."""
-        for station in self.get_all_stations():
-            if station.station_code == station_code:
-                return station
-        return None
-
-    def find_nearest_stations(self, lat: float, lon: float, limit: int = 3) -> list[MeteoStation]:
-        """Renvoie les `limit` stations les plus proches du point."""
-        stations = self.get_all_stations()
-        stations.sort(key=lambda s: haversine_km(lat, lon, s.latitude, s.longitude))
-        return stations[:limit]

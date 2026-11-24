@@ -7,14 +7,6 @@ classDiagram
         +float altitude
         +distance_to(lat, lon) float
     }
-    class TemperatureReport {
-        +date date
-        +float temp_min
-        +float temp_max
-        +bool observed
-        +daily_mean() float
-        +apply_altitude_correction(delta_alt) TemperatureReport
-    }
     class DjuType {
         +float base_temperature
         +str mode
@@ -40,7 +32,6 @@ classDiagram
     class GeographicZone {
         <<abstract>>
     }
-    TemperatureReport "*" --> "1" MeteoStation : mesuré par
     DjuCalculation "*" --> "1" DjuType : utilise
     DjuCalculation "1" *-- "*" DjuResult : produit
     DjuCalculation "*" --> "0..1" GeographicZone : zone

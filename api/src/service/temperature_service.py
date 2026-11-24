@@ -5,25 +5,20 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from business_object.geo_zone import EARTH_RADIUS_KM, Municipality
+from business_object.geo_zone import Municipality, haversine_km
 from business_object.meteo_station import MeteoStation
-from business_object.temperature_report import LAPSE_RATE
 from dao.meteo_station_dao import MeteoStationDao
 from dao.temperature_report_dao import REPORT_COLUMNS, TemperatureReportDao
 
+LAPSE_RATE = 0.0065  # °C par mètre : -0,65 °C par 100 m d'altitude
 MIN_DISTANCE_KM = 0.01  # évite une division par zéro quand le lieu est sur la station
 MAX_CANDIDATES = 50  # stations les plus proches examinées pour chaque lieu
+# Au-delà, une station ne représente plus le lieu (même rayon que pour le comblement des trous) :
+# un point en mer ou hors de France n'est pas estimé à partir de stations lointaines
+MAX_DISTANCE_KM = 50.0
 
 # Un lieu : clé -> (latitude, longitude, altitude ou None si pas de correction d'altitude)
 Locations = dict[str, tuple[float, float, float | None]]
-
-
-def distances_km(lat: float, lon: float, latitudes: np.ndarray, longitudes: np.ndarray) -> np.ndarray:
-    """Distances (formule de Haversine) en km entre un point et un tableau de positions."""
-    lat1, lon1 = np.radians(lat), np.radians(lon)
-    lat2, lon2 = np.radians(latitudes), np.radians(longitudes)
-    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
 class TemperatureService:
@@ -42,18 +37,20 @@ class TemperatureService:
     ) -> tuple[dict[str, list[MeteoStation]], pd.DataFrame]:
         """Pour chaque lieu, ses number_of_stations stations les plus proches qui ont des relevés.
 
-        Renvoie aussi les relevés de toutes ces stations, lus une seule fois même si une
+        Seules les stations à moins de MAX_DISTANCE_KM sont retenues : un lieu isolé peut donc
+        en recevoir moins que demandé, voire aucune. Renvoie aussi les relevés de toutes ces stations, lus une seule fois même si une
         station sert à plusieurs lieux.
         """
         stations = self.station_dao.get_all_stations()
         latitudes = np.array([s.latitude for s in stations])
         longitudes = np.array([s.longitude for s in stations])
 
-        # Pour chaque lieu : indices des stations, de la plus proche à la plus éloignée
-        nearest = {
-            key: np.argsort(distances_km(lat, lon, latitudes, longitudes))[:MAX_CANDIDATES]
-            for key, (lat, lon, _) in locations.items()
-        }
+        # Pour chaque lieu : indices des stations proches, de la plus proche à la plus éloignée
+        nearest = {}
+        for key, (lat, lon, _) in locations.items():
+            distances = haversine_km(lat, lon, latitudes, longitudes)
+            indices = np.argsort(distances)[:MAX_CANDIDATES]
+            nearest[key] = indices[distances[indices] <= MAX_DISTANCE_KM]
 
         loaded = set()  # stations dont les relevés sont déjà lus
         without_data = set()  # stations sans aucun relevé sur la période
@@ -117,7 +114,7 @@ class TemperatureService:
                 values = values - LAPSE_RATE * (altitude - station_altitudes)
 
             # Poids calculés une seule fois pour toute la période
-            distances = distances_km(
+            distances = haversine_km(
                 lat, lon, np.array([s.latitude for s in stations]), np.array([s.longitude for s in stations])
             )
             weights = 1 / np.maximum(distances, MIN_DISTANCE_KM) ** 2

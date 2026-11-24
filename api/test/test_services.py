@@ -108,11 +108,14 @@ class FakeGeoZoneDao:
         self.municipalities = municipalities
         self.department = department
         self.region = region
+        self.requested_codes = []
 
-    def get_department_by_id(self, department_id, with_municipalities=False):
+    def get_department_by_insee(self, insee_code, with_municipalities=False):
+        self.requested_codes.append(insee_code)
         return self.department
 
-    def get_region_by_id(self, region_id, with_municipalities=False):
+    def get_region_by_insee(self, insee_code, with_municipalities=False):
+        self.requested_codes.append(insee_code)
         return self.region
 
     def get_municipalities_by_insee(self, codes):
@@ -258,7 +261,7 @@ def test_location_without_station_gives_empty_column():
 
 def test_candidate_stations_skip_stations_without_reports():
     stations = [
-        MeteoStation(id=i, station_code=str(i), name=None, latitude=0.0, longitude=0.1 * i)
+        MeteoStation(id=i, station_code=str(i), name=None, latitude=0.0, longitude=0.05 * i)
         for i in range(1, 6)
     ]
     report_dao = FakeReportDao({3: [(DAY1, 1.0, True)], 5: [(DAY1, 2.0, True)]})
@@ -296,6 +299,29 @@ def test_municipality_temperatures_one_column_per_municipality():
 
 
 
+def test_candidate_stations_ignore_stations_too_far():
+    # 0,3° de longitude sur l'équateur ≈ 33 km ; 0,6° ≈ 67 km, au-delà de MAX_DISTANCE_KM
+    near = MeteoStation(id=1, station_code="1", name=None, latitude=0.0, longitude=0.3)
+    far = MeteoStation(id=2, station_code="2", name=None, latitude=0.0, longitude=0.6)
+    report_dao = FakeReportDao({1: [(DAY1, 1.0, True)], 2: [(DAY1, 2.0, True)]})
+    service = TemperatureService(FakeStationDao([near, far]), report_dao)
+
+    chosen, _ = service.find_candidate_stations(ORIGIN, 3, DAY1, DAY1)
+
+    assert [s.id for s in chosen["lieu"]] == [1]
+    assert report_dao.requested == [[1]]
+
+
+def test_point_far_from_every_station_gets_no_station():
+    # Un point au milieu de l'Atlantique, la seule station est à Brest
+    brest = MeteoStation(id=1, station_code="29075001", name="BREST", latitude=48.44, longitude=-4.41)
+    service = TemperatureService(FakeStationDao([brest]), FakeReportDao({1: [(DAY1, 9.0, True)]}))
+
+    chosen, _ = service.find_candidate_stations({"lieu": (46.0, -10.0, None)}, 3, DAY1, DAY1)
+
+    assert chosen == {"lieu": []}
+
+
 def test_no_station_at_all_gives_empty_reports():
     service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
     stations, reports = service.find_candidate_stations(ORIGIN, 3, DAY1, DAY2)
@@ -331,6 +357,7 @@ def test_point_without_station_is_404():
     with pytest.raises(ServiceError) as error:
         service.calculate_point_dju(point_request(heating_threshold=18))
     assert error.value.status_code == 404
+    assert "50 km" in error.value.message
 
 
 def test_point_with_two_thresholds():
@@ -375,7 +402,7 @@ def test_point_period_without_data_is_400():
 def zone_request(**kwargs):
     values = {
         "zone_type": "department",
-        "zone_id": 35,
+        "zone_code": "35",
         "start_date": DAY1,
         "end_date": DAY1,
         "heating_threshold": 18,
@@ -469,6 +496,20 @@ def test_get_missing_zoning_is_404():
     with pytest.raises(ServiceError) as error:
         make_zone_service(zoning=None).get_zone("zoning", 5, ALICE)
     assert error.value.status_code == 404
+
+
+def test_get_department_by_insee_code():
+    zone_service = make_zone_service(department=make_department())
+    assert zone_service.get_zone("department", " 2a ").insee_code == "35"
+    assert zone_service.get_zone("department", "1").name == "Ille-et-Vilaine"
+    # Codes normalisés : majuscules, sur deux caractères au moins
+    assert zone_service.zone_dao.requested_codes == ["2A", "01"]
+
+
+def test_get_zoning_with_non_numeric_id_is_400():
+    with pytest.raises(ServiceError) as error:
+        make_zone_service(zoning=make_zoning()).get_zone("zoning", "abc", ALICE)
+    assert error.value.status_code == 400
 
 
 def test_get_missing_department_is_404():

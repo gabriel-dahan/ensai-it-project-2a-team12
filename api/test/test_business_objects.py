@@ -2,20 +2,17 @@
 
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from business_object.dju import DjuCalculation, DjuType
 from business_object.geo_zone import Department, Municipality, Zoning, haversine_km
-from business_object.temperature_report import TemperatureReport
+from business_object.meteo_station import MeteoStation
 from business_object.user import User
 
 HEATING = DjuType(id=None, name="heating", base_temperature=18, mode="heating")
 COOLING = DjuType(id=None, name="cooling", base_temperature=22, mode="cooling")
-
-
-def report(day, t_min, t_max, observed=True):
-    return TemperatureReport(station_id=None, date=day, temp_min=t_min, temp_max=t_max, observed=observed)
 
 
 def point_data(*days_and_means, not_observed=()):
@@ -180,21 +177,21 @@ def test_run_for_zone_uses_only_columns_of_its_municipalities():
     assert results[0].value == 8
 
 
-# Géographie et relevés
+# Géographie
 
 def test_haversine_paris_lyon():
     assert haversine_km(48.8566, 2.3522, 45.7640, 4.8357) == pytest.approx(392, abs=2)
 
 
-def test_daily_mean():
-    assert report(date(2024, 1, 1), 4, 10).daily_mean() == 7
-    assert report(date(2024, 1, 1), None, 10).daily_mean() is None
+def test_haversine_on_arrays():
+    """Même fonction pour une distance ou pour un lieu face à toutes les stations."""
+    distances = haversine_km(48.8566, 2.3522, np.array([45.7640, 48.8566]), np.array([4.8357, 2.3522]))
+    assert distances == pytest.approx([392, 0], abs=2)
 
 
-def test_altitude_correction():
-    corrected = report(date(2024, 1, 1), 10, None).apply_altitude_correction(100)
-    assert corrected.temp_min == pytest.approx(9.35)  # -0,65 °C pour 100 m de plus
-    assert corrected.temp_max is None
+def test_station_distance_to():
+    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.8566, longitude=2.3522)
+    assert station.distance_to(45.7640, 4.8357) == pytest.approx(392, abs=2)
 
 
 def test_zoning_add_remove_by_insee_code():
