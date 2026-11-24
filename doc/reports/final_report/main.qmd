@@ -288,7 +288,7 @@ Le reste d'octobre a peu avancé : l'API ne démarrait pas avant que Gabriel la 
 
 Côté Git, tout le monde a travaillé directement sur la branche `main`, sans branche ni relecture avant fusion. 24 des 186 commits sont des fusions automatiques, créées quand deux personnes poussaient en même temps. Cela a suffi tant que chacun travaillait sur ses propres fichiers, mais des écarts de noms entre les couches ne sont apparus qu'à l'assemblage. Le travail a été réparti par domaine, chacun testant son propre code.
 
-- **Aziz Yousfi** : objets métier, contrôleurs et schémas, puis réécriture du calcul des DJU (`run()`, `run_for_zone()`) et tests des objets métier.
+- **Aziz Yousfi** : objets métier, contrôleurs et schémas Pydantic, diagrammes de classes et de cas d'utilisation, puis tests (validation des entrées de l'API, services, mots de passe, comblement des trous pour une station isolée).
 - **Eudes Sterlin** : socle de l'API et premier contrôleur, README, DAO des calculs DJU, schéma SQL final, mise à jour des diagrammes et état des lieux du code.
 - **Gabriel Dahan** : structure du dépôt et gabarit du rapport, connexion à la base, services et routes de toutes les fonctionnalités, gestion des erreurs, alignement de la couche DAO.
 - **Gwenaël Lassalle** : recherche des sources de données, import des communes, introduction et spécifications du dossier d'analyse, diagrammes, chargement de la France entière dans PostgreSQL et reconnexion automatique de l'API, rapport final.
