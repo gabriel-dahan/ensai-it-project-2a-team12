@@ -480,6 +480,12 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 
 : Codes d'erreur renvoyés par l'API
 
+## Tenue du code
+
+Le dépôt sépare l'API (`api/src`, un dossier par couche), les scripts de données (`data/`) et la documentation (`doc/`). Le README explique comment installer l'environnement, remplir le fichier `.env`, lancer les scripts d'initialisation puis l'API. Les classes et les méthodes portent une docstring d'une ligne en français, et les commentaires expliquent plutôt un choix qu'ils ne répètent le code.
+
+Nous avons configuré ruff dans `api/pyproject.toml`, avec une longueur de ligne et quelques règles d'erreurs courantes, mais sans le lancer systématiquement : une partie des fichiers n'est pas formatée. Le suivi est resté dans le dépôt : comptes rendus hebdomadaires de `doc/tracking/` et état des lieux du 3 novembre, qui a servi de liste de tâches jusqu'à la fin (@sec-organisation).
+
 ## Tests {#sec-tests}
 
 Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de base de données ni d'accès au réseau : on peut les lancer sur n'importe quelle machine, et leur résultat ne dépend pas du contenu de la base.
@@ -512,7 +518,7 @@ Les 137 tests passent. Le tableau suivant donne la couverture du code, mesurée 
 
 : Couverture des tests
 
-Les DAO sont peu couvertes, car elles ne font qu'exécuter des requêtes SQL et n'ont de sens que face à une vraie base. Nous les avons vérifiées en appelant toutes les fonctionnalités, d'abord sur une base contenant la Bretagne, puis sur la base complète.
+Les DAO sont peu couvertes : elles ne font qu'exécuter des requêtes SQL et n'ont de sens que face à une vraie base. Nous les avons vérifiées en appelant toutes les fonctionnalités, d'abord sur une base contenant la Bretagne, puis sur la base complète.
 
 ## Validation des résultats {#sec-validation}
 
@@ -545,9 +551,9 @@ Avec des réglages proches de ceux du SDES, l'écart reste faible dans la grande
 
 ## Performances {#sec-perf}
 
-Nous avons mesuré les temps de réponse depuis un ordinateur portable relié à la base distante. Ils comprennent donc les échanges réseau avec le serveur PostgreSQL. Chaque mesure n'a été faite qu'une fois et ne donne qu'un ordre de grandeur.
+Les temps ci-dessous ont été mesurés depuis un ordinateur portable relié à la base distante, échanges réseau compris. Chaque mesure n'a été faite qu'une fois et ne donne qu'un ordre de grandeur.
 
-Pour mesurer l'effet de la vectorisation (@sec-vectorisation), nous avons estimé les températures des 332 communes d'Ille-et-Vilaine sur l'année 2024 avec l'ancienne version du code, puis avec la nouvelle. Les deux produisent les mêmes 121 512 températures journalières (332 communes × 366 jours). L'ancienne version met 90,8 s, la nouvelle 0,9 s, soit environ 100 fois moins.
+Pour mesurer l'effet de la vectorisation (@sec-vectorisation), nous avons estimé les températures des 332 communes d'Ille-et-Vilaine sur 2024 avec l'ancienne version du code, puis avec la nouvelle. Les deux produisent les mêmes 121 512 valeurs journalières (332 communes × 366 jours), en 90,8 s pour la première et 0,9 s pour la seconde : environ 100 fois moins.
 
 Le tableau suivant donne les temps de réponse de l'API, pour un premier calcul puis pour la même requête servie par le cache.
 
@@ -624,8 +630,8 @@ D'autres limites concernent l'usage et la maintenance.
 - **Identifiants des zones.** Les routes F2 et F3 attendent l'identifiant interne d'une zone, et non son code INSEE : les Côtes-d'Armor ont l'identifiant 21 mais le code 22. Il serait plus simple d'accepter directement les codes INSEE. De même, pour créer un zonage, une recherche de communes par nom, et la possibilité d'ajouter d'un coup toutes les communes d'un département, rendraient F4 plus pratique.
 - **Écarts avec le diagramme de classes.** Les méthodes `distance_to()`, `daily_mean()` et `apply_altitude_correction()` des objets métier figurent dans le diagramme de classes, mais ne servent plus au calcul depuis la vectorisation : le service refait ces calculs sur des tableaux. Les tests de la distance d'Haversine portent sur la version des objets métier. Il faudrait supprimer ces méthodes ou les faire utiliser par le service.
 - **Contrôles de qualité non faits.** Les stations en doublon à moins de 500 m et les séries constantes pendant 30 jours (capteur bloqué) ne sont pas détectées. Un doublon ne fait que compter deux fois dans l'IDW, mais une série bloquée fausserait les DJU des lieux voisins.
-- **Tests et exploitation.** Les DAO ne sont vérifiées qu'à la main ; des tests sur un schéma PostgreSQL dédié, vidé après chaque test, compléteraient la couverture. Les relevés récents sont ajoutés en relançant les scripts à la main ; une mise à jour planifiée et un conteneur Docker faciliteraient l'exploitation.
-- **Correction climatique.** L'API pourrait aller jusqu'au calcul des coefficients de rigueur climatique, rapport entre un DJU de référence (par exemple la moyenne 1991–2020) et le DJU observé, qui servent à corriger les consommations.
+- **Tests et exploitation.** Les DAO ne sont vérifiées qu'à la main : des tests sur un schéma PostgreSQL dédié, vidé après chaque test, compléteraient la couverture. Les relevés récents sont ajoutés en relançant les scripts ; une mise à jour planifiée et un conteneur Docker faciliteraient l'exploitation.
+- **Correction climatique.** L'API pourrait calculer les coefficients de rigueur climatique, rapport entre un DJU de référence (la moyenne 1991–2020, par exemple) et le DJU observé.
 
 # Conclusion {.unnumbered}
 
