@@ -2,11 +2,9 @@ from datetime import date
 
 import pandas as pd
 
-from business_object.temperature_report import TemperatureReport
 from dao.db_connection import DBConnection
 from utils.singleton import Singleton
 
-COLUMNS = "id, station_id, date, temp_min, temp_max, source_tmin, source_tmax"
 REPORT_COLUMNS = ["station_id", "date", "temp_mean", "observed"]
 
 
@@ -28,22 +26,6 @@ class TemperatureReportDao(metaclass=Singleton):
                     row = cursor.fetchone()
             self._date_range = (row["first_date"], row["last_date"])
         return self._date_range
-
-    def get_reports_by_station_and_date_range(
-        self, station_id: int, start_date: date, end_date: date
-    ) -> list[TemperatureReport]:
-        """Renvoie les relevés d'une station sur la période, triés par date."""
-        with DBConnection().connection as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    f"SELECT {COLUMNS} FROM temperature_reports "
-                    "WHERE station_id = %s AND date BETWEEN %s AND %s "
-                    "ORDER BY date",
-                    (station_id, start_date, end_date),
-                )
-                rows = cursor.fetchall()
-
-        return [self._to_report(row) for row in rows]
 
     def get_reports_dataframe(
         self, station_ids: list[int], start_date: date, end_date: date
@@ -74,16 +56,3 @@ class TemperatureReportDao(metaclass=Singleton):
                 rows = cursor.fetchall()
 
         return pd.DataFrame(rows, columns=REPORT_COLUMNS)
-
-    @staticmethod
-    def _to_report(row: dict) -> TemperatureReport:
-        """Transforme une ligne en TemperatureReport."""
-        observed = row["source_tmin"] in (None, "observee") and row["source_tmax"] in (None, "observee")
-        return TemperatureReport(
-            id=row["id"],
-            station_id=row["station_id"],
-            date=row["date"],
-            temp_min=row["temp_min"],
-            temp_max=row["temp_max"],
-            observed=observed,
-        )

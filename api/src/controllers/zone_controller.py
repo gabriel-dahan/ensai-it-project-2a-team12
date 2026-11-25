@@ -26,18 +26,15 @@ service = ZoneService()
 
 def to_zone_response(zone: GeographicZone) -> ZoneResponse:
     """Convertit une zone officielle en schéma léger."""
-    return ZoneResponse(
-        id=zone.id, name=zone.name, zone_type=zone.zone_type, insee_code=zone.insee_code
-    )
+    return ZoneResponse(insee_code=zone.insee_code, name=zone.name, zone_type=zone.zone_type)
 
 
 def to_zone_detail(zone: GeographicZone) -> ZoneDetailResponse:
     """Convertit une zone officielle en schéma avec ses communes."""
     return ZoneDetailResponse(
-        id=zone.id,
+        insee_code=zone.insee_code,
         name=zone.name,
         zone_type=zone.zone_type,
-        insee_code=zone.insee_code,
         municipalities=[
             MunicipalityResponse(insee_code=m.insee_code, name=m.name)
             for m in zone.get_municipalities()
@@ -68,11 +65,11 @@ def list_zones(zone_type: ZoneTypeFilter = Query(default="all", alias="type")):
         raise http_error(exc) from exc
 
 
-@router.get("/{zone_type}/{zone_id}", response_model=ZoneDetailResponse)
-def get_zone(zone_type: Literal["region", "department"], zone_id: int):
-    """F2 : détail d'une région ou d'un département avec ses communes."""
+@router.get("/{zone_type}/{insee_code}", response_model=ZoneDetailResponse)
+def get_zone(zone_type: Literal["region", "department"], insee_code: str):
+    """F2 : détail d'une région ou d'un département (désigné par son code INSEE) avec ses communes."""
     try:
-        return to_zone_detail(service.get_zone(zone_type, zone_id))
+        return to_zone_detail(service.get_zone(zone_type, insee_code))
     except SERVICE_ERRORS as exc:
         raise http_error(exc) from exc
 

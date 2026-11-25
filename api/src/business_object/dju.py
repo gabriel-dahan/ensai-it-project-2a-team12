@@ -10,11 +10,11 @@ import pandas as pd
 from .geo_zone import GeographicZone
 from .meteo_station import MeteoStation
 
-TIME_STEPS = ("day", "week", "month", "year")  # week = semaine ISO, du lundi au dimanche
+TIME_STEPS = ("day", "week", "month", "year")
 
 
 def period_bounds(day: date, time_step: str) -> tuple[date, date]:
-    """Début et fin (calendaires) de la période qui contient le jour."""
+    """Début et fin de la période qui contient le jour."""
     if time_step == "day":
         return day, day
     if time_step == "week":
@@ -25,7 +25,7 @@ def period_bounds(day: date, time_step: str) -> tuple[date, date]:
         return date(day.year, day.month, 1), date(day.year, day.month, last_day)
     if time_step == "year":
         return date(day.year, 1, 1), date(day.year, 12, 31)
-    raise ValueError(f"Pas de temps inconnu : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
+    raise ValueError(f"Type de période inconnue : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
 
 
 @dataclass
@@ -46,9 +46,6 @@ class DjuType:
 
     def is_heating(self) -> bool:
         return self.mode == "heating"
-
-    def is_cooling(self) -> bool:
-        return self.mode == "cooling"
 
 
 @dataclass
@@ -86,10 +83,7 @@ class DjuCalculation:
         daily_means : température moyenne indexée par date (NaN si inconnue) ;
         daily_observed : vrai si la valeur du jour ne repose que sur des mesures observées.
         """
-        self._set_daily_values(self.type.compute_daily_value(daily_means), daily_observed)
-        self.results = self.aggregate(self.time_step)
-        self.computed_at = date.today()
-        return self.results
+        return self._finish(self.type.compute_daily_value(daily_means), daily_observed)
 
     def run_for_zone(self, means: pd.DataFrame, observed: pd.DataFrame) -> list[DjuResult]:
         """Calcule les DJU d'une zone : moyenne des communes pondérée par la population.
@@ -117,14 +111,11 @@ class DjuCalculation:
         weight_total = has_value.mul(weights, axis=1).sum(axis=1)
         daily_dju = weighted_sum / weight_total.where(weight_total > 0)
         daily_observed = (observed[codes] | ~has_value).all(axis=1)
+        return self._finish(daily_dju, daily_observed)
 
-        self._set_daily_values(daily_dju, daily_observed)
-        self.results = self.aggregate(self.time_step)
-        self.computed_at = date.today()
-        return self.results
-
-    def _set_daily_values(self, daily_dju: pd.Series, daily_observed: pd.Series) -> None:
-        """Garde les DJU journaliers connus et compris dans la période demandée."""
+    def _finish(self, daily_dju: pd.Series, daily_observed: pd.Series) -> list[DjuResult]:
+        """Fin commune à run et run_for_zone : garde les DJU journaliers connus et compris
+        dans la période demandée, puis les cumule au pas de temps du calcul."""
         known = daily_dju.notna().to_numpy()
         self.daily_values = {
             day: (float(value), bool(is_observed))
@@ -133,6 +124,9 @@ class DjuCalculation:
             )
             if self.start_date <= day <= self.end_date
         }
+        self.results = self.aggregate(self.time_step)
+        self.computed_at = date.today()
+        return self.results
 
     def aggregate(self, time_step: str) -> list[DjuResult]:
         """Cumule les DJU journaliers par jour, semaine, mois ou année."""

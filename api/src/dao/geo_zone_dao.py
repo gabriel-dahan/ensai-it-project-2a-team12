@@ -37,12 +37,15 @@ class GeoZoneDao(metaclass=Singleton):
         )
         return [self._to_department(row) for row in rows]
 
-    def get_region_by_id(self, region_id: int, with_municipalities: bool = False) -> Region | None:
-        """Renvoie la région avec ses départements (et leurs communes si demandé), ou None."""
-        rows = self._fetch_all("SELECT id, insee_code, name FROM regions WHERE id = %s", (region_id,))
+    def get_region_by_insee(self, insee_code: str, with_municipalities: bool = False) -> Region | None:
+        """Renvoie la région de ce code INSEE avec ses départements (et leurs communes si demandé), ou None."""
+        rows = self._fetch_all(
+            "SELECT id, insee_code, name FROM regions WHERE insee_code = %s", (insee_code,)
+        )
         if not rows:
             return None
         region = self._to_region(rows[0])
+        region_id = region.id
 
         rows = self._fetch_all(
             "SELECT id, insee_code, name, region_id FROM departments "
@@ -66,27 +69,22 @@ class GeoZoneDao(metaclass=Singleton):
                 departments[row["department_id"]].add_municipality(municipality_from_row(row))
         return region
 
-    def get_department_by_id(
-        self, department_id: int, with_municipalities: bool = False
+    def get_department_by_insee(
+        self, insee_code: str, with_municipalities: bool = False
     ) -> Department | None:
-        """Renvoie le département (avec ses communes si demandé), ou None."""
+        """Renvoie le département de ce code INSEE (avec ses communes si demandé), ou None."""
         rows = self._fetch_all(
-            "SELECT id, insee_code, name, region_id FROM departments WHERE id = %s",
-            (department_id,),
+            "SELECT id, insee_code, name, region_id FROM departments WHERE insee_code = %s",
+            (insee_code,),
         )
         if not rows:
             return None
         department = self._to_department(rows[0])
 
         if with_municipalities:
-            for municipality in self.get_municipalities_by_department(department_id):
+            for municipality in self.get_municipalities_by_department(department.id):
                 department.add_municipality(municipality)
         return department
-
-    def get_municipality_by_insee(self, insee_code: str) -> Municipality | None:
-        """Renvoie la commune de ce code INSEE, ou None."""
-        municipalities = self.get_municipalities_by_insee([insee_code])
-        return municipalities[0] if municipalities else None
 
     def get_municipalities_by_insee(self, codes: list[str]) -> list[Municipality]:
         """Renvoie les communes connues parmi ces codes INSEE (une requête)."""

@@ -14,12 +14,11 @@ class MunicipalityResponse(BaseModel):
 
 
 class ZoneResponse(BaseModel):
-    """Zone officielle sans ses communes."""
+    """Zone officielle sans ses communes ; insee_code sert à la désigner dans les autres routes."""
 
-    id: int | None
+    insee_code: str
     name: str
     zone_type: str
-    insee_code: str | None = None
 
 
 class ZoneDetailResponse(ZoneResponse):
