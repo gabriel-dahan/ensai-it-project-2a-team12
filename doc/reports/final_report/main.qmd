@@ -743,7 +743,11 @@ Sur le plan personnel, j'ai appris ce qu'étaient des DJU, ainsi que des méthod
 
 J'ai commencé par rechercher les sources de données et écrire l'import du référentiel des communes. J'ai rédigé l'introduction et la première partie du dossier d'analyse, ainsi que plusieurs diagrammes, que j'ai mis à jour après les remarques du tuteur. J'ai également étudié les méthodes possibles pour traiter les données manquantes. En fin de projet, j'ai chargé les données de la France entière dans la base PostgreSQL distante (4 555 stations, environ 32 millions de relevés), ajouté la reconnexion automatique de l'API et rédigé le rapport final.
 
-La difficulté principale a été le volume des données : une insertion ligne par ligne était beaucoup trop lente, et le serveur distant fermait les connexions inactives, ce qui faisait échouer la première requête après une pause. J'ai appris à utiliser `COPY` pour les chargements massifs et à rendre une connexion robuste. Ce projet m'a aussi montré qu'un rapport se construit tout au long du projet, et pas seulement à la fin.
+La difficulté principale a été le volume des données : une insertion ligne par ligne était beaucoup trop lente, et le serveur distant fermait les connexions inactives, ce qui faisait échouer la première requête après une pause. J'ai appris à utiliser `COPY` pour les chargements massifs et à rendre une connexion robuste.
+
+Ce projet m'a surtout appris comment marche une API. Avant, c'était pour moi une adresse à laquelle on envoie une requête. J'ai vu cette fois les différentes couches : le contrôleur qui vérifie ce qu'on lui envoie, le service qui organise le travail, les objets métier qui font le calcul et les DAO qui vont chercher les données. Je trouvais ça compliqué au début, mais ça nous a permis de changer le calcul sans toucher aux routes, et de tester sans base de données.
+
+J'ai aussi progressé en code, surtout avec pandas et SQL sur de gros volumes, et sur le travail à plusieurs dans un même dépôt. Et j'ai compris qu'un rapport s'écrit au fur et à mesure, pas à la fin.
 
 ### Marceau Feral
 
