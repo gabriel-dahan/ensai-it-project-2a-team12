@@ -343,7 +343,7 @@ Le troisième groupe décrit le calcul (@fig-classes-dju). Un `DjuCalculation` r
 Les services coordonnent ces objets. Ce sont les seuls à utiliser les DAO.
 
 | Service | Méthodes principales | Rôle |
-|:--------------------|:-------------------------------|:---------------------------|
+|:------------------|:---------------------------|:------------------------|
 | `DjuService` | `calculate_point_dju`, `calculate_zone_dju` | Contrôle la requête, crée les `DjuCalculation`, consulte et remplit le cache des calculs sur territoire |
 | `TemperatureService` | `find_candidate_stations`, `estimate_daily_temperatures`, `get_municipality_temperatures` | Choisit les stations, lit leurs relevés et estime les températures par IDW |
 | `ZoneService` | `list_public_zones`, `get_zone`, `get_sub_zones`, `create_zoning`, `import_zoning`, `update_zoning`, `delete_zoning` | Lit les territoires, découpe une zone, gère les zonages et vérifie leur propriétaire |
@@ -420,7 +420,7 @@ Le dossier d'analyse décrivait la conception prévue avant l'écriture du code.
 \newpage
 
 | Sujet | Prévu dans le dossier d'analyse | Réalisé | Raison du changement |
-|:-----------|:--------------------------|:------------------------------|:--------------------------|
+|:---------------|:-----------------|:--------------------|:-----------------|
 | Stockage des relevés | Séries de températures lues en Parquet par l'API | Parquet seulement entre les scripts de préparation ; l'API ne lit que PostgreSQL ([-@sec-stockage]) | Une seule source pendant les calculs, avec index et clés étrangères |
 | Cache | Deux niveaux : températures quotidiennes par lieu, puis résultats finaux, pour F1 et F3 | Un seul niveau : résultats des calculs sur territoire ; F1 non stocké ([-@sec-cache]) | Premier niveau trop volumineux, et devenu inutile après la vectorisation ; coordonnées d'un point rarement identiques |
 | Nettoyage des données | Exclusion des stations couvrant moins de 65 % de la période, des doublons à moins de 500 m et des séries constantes sur 30 jours | Valeurs hors de \[−50 ; 50\] °C vidées puis comblées ; aucune station exclue ([-@sec-manquantes]) | Une station sans relevés est remplacée à l'estimation ; les deux autres contrôles n'ont pas été faits, faute de temps |
@@ -442,9 +442,9 @@ Aucune fonctionnalité du cahier des charges n'a été abandonnée. Ces changeme
 
 ## Tenue du code
 
-Le dépôt sépare l'API (`api/src`, un dossier par couche), les scripts de données (`data/`) et la documentation (`doc/`). Le README explique comment installer l'environnement, remplir le fichier `.env`, lancer les scripts d'initialisation puis l'API. Les classes et les méthodes portent une docstring d'une ligne en français, et les commentaires expliquent plutôt un choix qu'ils ne répètent le code.
+Le dépôt sépare l'API (`api/src`, un dossier par couche), les scripts de données (`data/`) et la documentation (`doc/`). Le README de la racine présente le projet (méthode, données, installation, `.env`, chargement de la base), celui d'`api/` l'API elle-même (routes, exemples, erreurs, architecture, tests). Les modules, les classes et les méthodes portent une docstring d'une ligne en français, et les commentaires expliquent plutôt un choix qu'ils ne répètent le code.
 
-Nous avons configuré ruff dans `api/pyproject.toml`, avec une longueur de ligne et quelques règles d'erreurs courantes, mais sans le lancer systématiquement : une partie des fichiers n'est pas formatée. Le suivi est resté dans le dépôt : comptes rendus hebdomadaires de `doc/tracking/` et état des lieux du 3 novembre, qui a servi de liste de tâches jusqu'à la fin (@sec-organisation).
+Ruff, configuré dans `api/pyproject.toml` et appliqué aussi à `data/`, n'a été lancé systématiquement qu'en fin de projet : tout le code passe désormais `ruff check` et `ruff format --check`. Le suivi est resté dans le dépôt : comptes rendus hebdomadaires de `doc/tracking/` et état des lieux du 3 novembre, qui a servi de liste de tâches jusqu'à la fin (@sec-organisation).
 
 ## Points techniques notables
 
@@ -480,7 +480,7 @@ Les services lèvent une seule exception, `ServiceError`, qui porte un message e
 \needspace{8\baselineskip}
 
 | Code | Cas |
-|:---------|:------------------------------------------------------------|
+|:--------------|:--------------------------------------------------------|
 | 400 | Paramètres incohérents : aucun seuil, dates dans le désordre, période sans données, code INSEE inconnu, fichier illisible |
 | 401 | Jeton absent, invalide ou expiré ; identifiants incorrects |
 | 403 | Zonage appartenant à un autre utilisateur |
@@ -497,17 +497,17 @@ Les tests ont été écrits avec pytest, couche par couche. Aucun ne demande de 
 \needspace{8\baselineskip}
 
 | Couche testée | Fichier | Tests | Méthode |
-|:----------------------|:---------------------------|------:|:------------------------------|
+|:---------------|:-------------------|--------------:|:---------------------|
 | Objets métier | `test_business_objects.py` | 25 | Données écrites à la main |
 | Services | `test_services.py` | 53 | DAO remplacées par de faux objets |
-| Contrôleurs et routes | `test_api.py` | 41 | Services remplacés, `TestClient` de FastAPI |
+| Contrôleurs et routes | `test_api.py` | 42 | Services remplacés, `TestClient` de FastAPI |
 | Scripts de données | `test_data.py` | 25 | Fichiers fictifs, fausse connexion |
 
 : Répartition des tests (les trois premiers fichiers sont dans `api/test/`, le dernier dans `data/`)
 
 Les tests des objets métier vérifient la formule du DJU (jamais négative, en chauffage comme en climatisation), l'agrégation par semaine, mois et année avec des périodes coupées, et la pondération par la population, y compris quand certaines populations sont inconnues, et la distance d'Haversine entre Paris et Lyon, sur deux points comme sur un tableau. Pour les services, les DAO sont remplacées par de faux objets qui renvoient des données fixes. On peut ainsi tester l'estimation IDW sur deux stations, la correction d'altitude, le remplacement d'une station sans relevés, le lieu sans aucune station, l'utilisation du cache F3 et les codes d'erreur 400, 401, 403, 404 et 409. Les tests de routes vérifient les codes HTTP, la validation Pydantic (422) et le format CSV. Ceux des scripts de données vérifient chaque palier du comblement et le chargement en base sur une fausse connexion.
 
-Les 144 tests passent. Le tableau suivant donne la couverture du code, mesurée avec `coverage`.
+Les 145 tests passent. Le tableau suivant donne la couverture du code, mesurée avec `coverage`.
 
 \needspace{9\baselineskip}
 
@@ -531,7 +531,7 @@ Les tests vérifient que le code fait ce que nous avons prévu, pas que les vale
 Notre API permet de reproduire ces choix : seuil de 17 °C, une station (`number_of_stations = 1`), pas de correction d'altitude, puis somme des DJU mensuels de la saison de chauffe. Nous avons calculé l'année 2024 pour les 96 départements métropolitains avec ces réglages, puis avec les réglages par défaut (3 stations, correction d'altitude). Ce calcul a utilisé le code de l'API sans passer par le cache, pour ne pas y stocker de calculs de test.
 
 | Réglages de l'API | Écart moyen (en valeur absolue) | Départements à moins de 5 % | Corrélation |
-|:---------------------------------|------------:|------------:|------------:|
+|:----------------------------|--------------:|--------------:|--------------:|
 | Proches du SDES (1 station, sans altitude) | 1,8 % | 92 % | 0,99 |
 | Par défaut (3 stations, avec altitude) | 2,6 % | 85 % | 0,98 |
 
@@ -562,7 +562,7 @@ Pour mesurer l'effet de la vectorisation (@sec-vectorisation), nous avons estim�
 Le tableau suivant donne les temps de réponse de l'API, pour un premier calcul puis pour la même requête servie par le cache.
 
 | Requête (DJU de chauffage, pas mensuel sauf mention) | Communes | Premier calcul | Même requête (cache FO1) |
-|:---------------------------------|------------:|------------:|------------:|
+|:----------------------------|--------------:|--------------:|--------------:|
 | F1 : point GPS (Rennes), 2024 | — | 0,1 s | non stocké |
 | F3 : Ille-et-Vilaine, 2024 | 332 | 1,3 s | 0,5 s |
 | F3 : Bretagne, 2024 | 1 202 | 2,0 s | 0,6 s |
@@ -643,7 +643,7 @@ Nous avons confronté nos résultats à une référence extérieure : avec des r
 
 Ces résultats tiennent surtout au traitement des données manquantes, fait une seule fois avant le chargement en base, avec une méthode adaptée à la longueur de chaque trou et une traçabilité qui remonte jusqu'à l'utilisateur. Ils tiennent aussi à l'estimation des températures par pondération inverse à la distance, corrigée de l'altitude, que nous avons dû vectoriser pour qu'elle reste rapide sur des milliers de communes.
 
-Le projet a beaucoup évolué depuis le dossier d'analyse (@sec-evolutions). Nous avons abandonné la lecture des séries en Parquet par l'API, un des deux niveaux de cache et plusieurs règles de nettoyage, à chaque fois pour une solution plus simple qui répondait au même besoin. Les remarques du tuteur nous ont conduits à réécrire la modélisation pour la rapprocher du code, ce qui a rendu le développement des services beaucoup plus rapide. L'architecture en couches et l'injection des DAO dans les services nous ont enfin permis d'écrire 144 tests qui ne dépendent d'aucune base de données.
+Le projet a beaucoup évolué depuis le dossier d'analyse (@sec-evolutions). Nous avons abandonné la lecture des séries en Parquet par l'API, un des deux niveaux de cache et plusieurs règles de nettoyage, à chaque fois pour une solution plus simple qui répondait au même besoin. Les remarques du tuteur nous ont conduits à réécrire la modélisation pour la rapprocher du code, ce qui a rendu le développement des services beaucoup plus rapide. L'architecture en couches et l'injection des DAO dans les services nous ont enfin permis d'écrire 145 tests qui ne dépendent d'aucune base de données.
 
 Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par domaine ont bien fonctionné : chacun savait de quelle partie il était responsable, et les remarques du tuteur ont été prises en compte rapidement. L'avancement a en revanche été irrégulier. Plusieurs semaines d'octobre ont peu avancé, comme le montre le suivi, et l'essentiel des services, de l'intégration et des tests s'est concentré entre fin octobre et début novembre. Les couches ayant été écrites séparément, et sans relecture avant de pousser sur `main`, leur assemblage a fait apparaître tardivement des écarts de noms et de signatures. Avec le recul, nous aurions dû rendre l'API exécutable de bout en bout dès les premières semaines, même avec une seule fonctionnalité, puis l'enrichir petit à petit, en écrivant les tests en même temps que le code et en relisant le travail des autres avant chaque fusion.
 
@@ -697,7 +697,7 @@ Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par doma
 ## Synthèse des routes {#sec-routes}
 
 | Fonct. | Route | Auth. | Paramètres d'entrée | Description |
-|:-----|:------------------------|:---------|:--------------------------|:------------------------|
+|:-------------|:--------------|:-------------|:---------------|:--------------|
 | F1 | `POST /dju/point` | Aucune | `latitude`, `longitude`, `altitude?`, `start_date`, `end_date`, `time_step`, `heating_threshold?`, `cooling_threshold?`, `number_of_stations?` | DJU sur un point GPS |
 | F2 | `GET /zones` | Aucune | `type` (`department` \| `region` \| `all`) | Liste des zonages officiels |
 | F2 | `GET /zones/{zone_type}/{insee_code}` | Aucune | `zone_type`, `insee_code` | Détail d'une zone et de ses communes |
@@ -711,7 +711,7 @@ Sur le plan de l'organisation, le suivi hebdomadaire et la répartition par doma
 | FO1 | — | — | Paramètres de F3 | Réutilisation des calculs sur territoire |
 | FO2 | `?format=csv` | — | `json` (défaut) ou `csv` | Sortie de F1 et F3 en CSV |
 | FO3 | `POST /user/zones/import` | Requise | `filename`, `content`, `name?`, `description?` | Import d'un zonage CSV ou JSON |
-| — | `GET /health` | Aucune | — | Vérifie que l'API répond |
+| — | `GET /health` | Aucune | — | Vérifie que l'API et la base répondent |
 
 : Routes de l'API (¹ authentification obligatoire pour un zonage personnalisé ; au moins un des deux seuils est requis pour F1 et F3)
 
@@ -745,8 +745,7 @@ J'ai commencé par rechercher les sources de données et écrire l'import du ré
 
 La difficulté principale a été le volume des données : une insertion ligne par ligne était beaucoup trop lente, et le serveur distant fermait les connexions inactives, ce qui faisait échouer la première requête après une pause. J'ai appris à utiliser `COPY` pour les chargements massifs et à rendre une connexion robuste.
 
-Ce projet m'a surtout appris comment marche une API avec les différentes couches : le contrôleur qui vérifie ce qu'on lui envoie, le service qui organise le travail, les objets métier qui font le calcul et les DAO qui vont chercher les données. Je trouvais ça compliqué au début, mais à force de les manipuler tout est devenu plus clair.
-J'ai aussi progressé en code, surtout avec pandas et SQL sur de gros volumes, et sur le travail à plusieurs dans un même dépôt. 
+Ce projet m'a surtout appris comment marche une API avec les différentes couches : le contrôleur qui vérifie ce qu'on lui envoie, le service qui organise le travail, les objets métier qui font le calcul et les DAO qui vont chercher les données. Je trouvais ça compliqué au début, mais à force de les manipuler tout est devenu plus clair. J'ai aussi progressé en code, surtout avec pandas et SQL sur de gros volumes, et sur le travail à plusieurs dans un même dépôt.
 
 ### Marceau Feral
 

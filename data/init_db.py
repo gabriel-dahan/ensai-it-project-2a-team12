@@ -86,7 +86,9 @@ def inserer_departements(conn) -> None:
     """Départements (rattachés à leur région)."""
     df = pd.read_parquet(RAW_DIR / "departements.parquet")
     regions = ids_par_code(conn, "regions", "insee_code")
-    lignes = [(d.code, d.nom, regions[d.codeRegion]) for d in df.itertuples() if d.codeRegion in regions]
+    lignes = [
+        (d.code, d.nom, regions[d.codeRegion]) for d in df.itertuples() if d.codeRegion in regions
+    ]
     inserer(conn, "departments", ["insee_code", "name", "region_id"], lignes)
 
 
@@ -109,7 +111,15 @@ def inserer_communes(conn) -> None:
         )
         for c in df[~inconnues].itertuples()
     ]
-    colonnes = ["insee_code", "name", "latitude", "longitude", "altitude", "population", "department_id"]
+    colonnes = [
+        "insee_code",
+        "name",
+        "latitude",
+        "longitude",
+        "altitude",
+        "population",
+        "department_id",
+    ]
     inserer(conn, "municipalities", colonnes, lignes)
 
 
@@ -120,7 +130,12 @@ def inserer_stations(conn, meteo: pd.DataFrame) -> None:
         (s.NUM_POSTE, sans_nan(s.NOM_USUEL), s.LAT, s.LON, sans_nan(s.ALTI))
         for s in stations.itertuples()
     ]
-    inserer(conn, "meteo_stations", ["station_code", "name", "latitude", "longitude", "altitude"], lignes)
+    inserer(
+        conn,
+        "meteo_stations",
+        ["station_code", "name", "latitude", "longitude", "altitude"],
+        lignes,
+    )
 
 
 def inserer_releves(conn, meteo: pd.DataFrame) -> None:
@@ -164,6 +179,7 @@ def inserer_releves(conn, meteo: pd.DataFrame) -> None:
 
 
 def main() -> None:
+    """Crée les tables puis les remplit à partir des fichiers Parquet."""
     conn = connecter()
     try:
         creer_tables(conn)

@@ -17,6 +17,7 @@ class AuthService:
     """Gestion des comptes et des jetons d'accès."""
 
     def __init__(self, user_dao=None):
+        """La DAO peut être remplacée par un objet factice dans les tests."""
         self.user_dao = user_dao or UserDao()
 
     def register(self, username: str, password: str) -> User:

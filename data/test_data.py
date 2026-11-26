@@ -9,13 +9,12 @@ Lancement depuis la racine du dépôt : pytest data/test_data.py
 
 import gzip
 
-import numpy as np
-import pandas as pd
-import pytest
-
 import communes
 import init_db
 import meteo
+import numpy as np
+import pandas as pd
+import pytest
 import qualite_meteo
 
 
@@ -61,19 +60,30 @@ def test_filtrer_donnees_meteo(tmp_path):
     assert df["NUM_POSTE"].iloc[0] == "01014002"
     assert df["NOM_USUEL"].iloc[0] == "BÉZIERS"
     assert df["TMIN"].iloc[0] == -2.5
-    assert set(df.columns) == {"NUM_POSTE", "DATE", "NOM_USUEL", "TMIN", "TMAX", "LAT", "LON", "ALTI"}
+    assert set(df.columns) == {
+        "NUM_POSTE",
+        "DATE",
+        "NOM_USUEL",
+        "TMIN",
+        "TMAX",
+        "LAT",
+        "LON",
+        "ALTI",
+    }
 
 
 # --- qualite_meteo.py : fonctions élémentaires ---
 
 
 def test_longueur_trou():
+    """Chaque valeur manquante reçoit la longueur du trou auquel elle appartient."""
     masque = pd.Series([False, True, True, False, True])
     longueurs = qualite_meteo._longueur_trou(masque)
     assert longueurs.fillna(-1).tolist() == [-1, 2, 2, -1, 1]
 
 
 def test_distance_paris_lyon():
+    """La distance Haversine Paris-Lyon est d'environ 392 km."""
     assert abs(qualite_meteo._distance_km(48.8566, 2.3522, 45.7640, 4.8357) - 392) < 5
     assert qualite_meteo._distance_km(45.0, 5.0, 45.0, 5.0) == 0
 
@@ -115,6 +125,7 @@ def test_retirer_incoherences():
 
 
 def test_trou_court_interpole():
+    """Un trou d'un jour est comblé par interpolation linéaire."""
     df = _station("01", tmin=[10.0, np.nan, 14.0], tmax=[20.0, 21.0, 22.0])
     resultat = qualite_meteo.traiter_valeurs_manquantes(df)
     ligne = _ligne(resultat, "01", 1)
@@ -150,6 +161,7 @@ def test_trou_en_debut_de_serie_non_comble():
 
 
 def test_station_pluie_seule_retiree():
+    """Une station sans aucune température est retirée."""
     df = pd.concat(
         [
             _station("01", tmin=[1.0, 2.0], tmax=[5.0, 6.0]),
@@ -236,7 +248,6 @@ def test_trou_long_sans_voisine_utilisable():
     assert ligne["SOURCE_TMIN"] == "manquante"
 
 
-
 def test_trou_moyen_station_isolee_comble_par_tendance_locale():
     """Trou de 4 jours sans aucune voisine : comblé par la tendance locale seule."""
     jours = np.arange(60)
@@ -257,12 +268,16 @@ def test_trou_moyen_station_isolee_comble_par_tendance_locale():
 @pytest.mark.parametrize(
     "commune, attendu",
     [
-        ({"mairie": {"coordinates": [6.87, 45.92]}, "centre": {"coordinates": [6.93, 45.93]}}, [6.87, 45.92]),
+        (
+            {"mairie": {"coordinates": [6.87, 45.92]}, "centre": {"coordinates": [6.93, 45.93]}},
+            [6.87, 45.92],
+        ),
         ({"centre": {"coordinates": [6.93, 45.93]}}, [6.93, 45.93]),
         ({"mairie": None, "centre": {"coordinates": [6.93, 45.93]}}, [6.93, 45.93]),
     ],
 )
 def test_coordonnees_mairie_sinon_centre(commune, attendu):
+    """La mairie est utilisée si elle est connue, sinon le centre de la commune."""
     assert communes._coordonnees(commune) == attendu
 
 
@@ -291,6 +306,8 @@ class _FauxCurseur:
 
 
 class _FausseConnexion:
+    """Remplace une connexion psycopg2 : garde les lots reçus par le faux curseur."""
+
     def __init__(self):
         self.lots_recus = []
 

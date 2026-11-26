@@ -120,7 +120,7 @@ class FakeGeoZoneDao:
 
     def get_municipalities_by_insee(self, codes):
         return [m for m in self.municipalities if m.insee_code in codes]
-    
+
     def get_regions(self):
         return [self.region] if self.region else []
 
@@ -235,7 +235,9 @@ def test_idw_uses_only_stations_with_a_value():
 
 
 def test_altitude_correction():
-    station = MeteoStation(id=1, station_code="A", name="A", latitude=0.0, longitude=0.1, altitude=100.0)
+    station = MeteoStation(
+        id=1, station_code="A", name="A", latitude=0.0, longitude=0.1, altitude=100.0
+    )
     service = TemperatureService(FakeStationDao([]), FakeReportDao({}))
 
     means, _ = service.estimate_daily_temperatures(
@@ -287,8 +289,12 @@ def test_station_shared_by_two_locations_is_read_once():
 
 
 def test_municipality_temperatures_one_column_per_municipality():
-    station = MeteoStation(id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5, altitude=0.0)
-    service = TemperatureService(FakeStationDao([station]), FakeReportDao({1: [(DAY1, 10.0, True)]}))
+    station = MeteoStation(
+        id=1, station_code="A", name="A", latitude=48.0, longitude=-1.5, altitude=0.0
+    )
+    service = TemperatureService(
+        FakeStationDao([station]), FakeReportDao({1: [(DAY1, 10.0, True)]})
+    )
 
     means, _ = service.get_municipality_temperatures(
         [municipality("35238"), municipality("35047")], DAY1, DAY1, use_altitude=False
@@ -296,7 +302,6 @@ def test_municipality_temperatures_one_column_per_municipality():
 
     assert list(means.columns) == ["35238", "35047"]
     assert means.loc[DAY1, "35238"] == pytest.approx(10.0)  # sans correction d'altitude
-
 
 
 def test_candidate_stations_ignore_stations_too_far():
@@ -314,7 +319,9 @@ def test_candidate_stations_ignore_stations_too_far():
 
 def test_point_far_from_every_station_gets_no_station():
     # Un point au milieu de l'Atlantique, la seule station est à Brest
-    brest = MeteoStation(id=1, station_code="29075001", name="BREST", latitude=48.44, longitude=-4.41)
+    brest = MeteoStation(
+        id=1, station_code="29075001", name="BREST", latitude=48.44, longitude=-4.41
+    )
     service = TemperatureService(FakeStationDao([brest]), FakeReportDao({1: [(DAY1, 9.0, True)]}))
 
     chosen, _ = service.find_candidate_stations({"lieu": (46.0, -10.0, None)}, 3, DAY1, DAY1)
@@ -348,7 +355,9 @@ def test_point_without_threshold_is_400():
 def test_point_with_dates_in_wrong_order_is_400():
     service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
     with pytest.raises(ServiceError) as error:
-        service.calculate_point_dju(point_request(start_date=DAY2, end_date=DAY1, heating_threshold=18))
+        service.calculate_point_dju(
+            point_request(start_date=DAY2, end_date=DAY1, heating_threshold=18)
+        )
     assert error.value.status_code == 400
 
 
@@ -391,7 +400,9 @@ def test_point_period_without_data_is_400():
     service = DjuService(FakeTemperatureService([], {}), make_zone_service(), FakeDjuDao())
     with pytest.raises(ServiceError) as error:
         service.calculate_point_dju(
-            point_request(start_date=date(2030, 1, 1), end_date=date(2030, 12, 31), heating_threshold=18)
+            point_request(
+                start_date=date(2030, 1, 1), end_date=date(2030, 12, 31), heating_threshold=18
+            )
         )
     assert error.value.status_code == 400
 
@@ -429,11 +440,21 @@ def test_zone_not_in_cache_is_computed_and_saved():
     assert len(result) == 2  # une sous-zone, deux modes
     assert result[0].results[0].value == pytest.approx(13.0)
     assert len(dju_dao.saved) == 2
-    assert temperatures.municipality_calls == 1  # une fois pour toutes les communes et les deux modes
+    # une fois pour toutes les communes et les deux modes
+    assert temperatures.municipality_calls == 1
 
 
 def test_zone_found_in_cache():
-    stored = [DjuResult(id=1, period_start=DAY1, period_end=DAY1, value=42.0, days_with_data=1, observed_ratio=1.0)]
+    stored = [
+        DjuResult(
+            id=1,
+            period_start=DAY1,
+            period_end=DAY1,
+            value=42.0,
+            days_with_data=1,
+            observed_ratio=1.0,
+        )
+    ]
     temperatures = FakeTemperatureService([], {})
     dju_dao = FakeDjuDao(stored_id=5, stored_results=stored)
     service = DjuService(temperatures, make_zone_service(department=make_department()), dju_dao)
@@ -449,7 +470,9 @@ def test_zone_found_in_cache():
 
 def test_zone_by_municipality():
     temperatures = FakeTemperatureService([], {DAY1: 5.0})
-    service = DjuService(temperatures, make_zone_service(department=make_department()), FakeDjuDao())
+    service = DjuService(
+        temperatures, make_zone_service(department=make_department()), FakeDjuDao()
+    )
 
     result = service.calculate_zone_dju(
         zone_request(cooling_threshold=None, aggregation_level="municipality"), None
@@ -461,7 +484,9 @@ def test_zone_by_municipality():
 
 def test_zone_period_cut_before_cache_lookup():
     temperatures = FakeTemperatureService([], {DAY1: 5.0})
-    service = DjuService(temperatures, make_zone_service(department=make_department()), FakeDjuDao())
+    service = DjuService(
+        temperatures, make_zone_service(department=make_department()), FakeDjuDao()
+    )
 
     result = service.calculate_zone_dju(
         zone_request(cooling_threshold=None, end_date=date(2030, 1, 1)), None
@@ -604,7 +629,6 @@ def test_delete_zoning():
     assert service.zoning_dao.deleted == 5
 
 
-
 def test_list_public_zones():
     region = Region(id=53, name="Bretagne", insee_code="53")
     department = make_department()
@@ -631,7 +655,10 @@ def test_sub_zones_by_zone_municipality_and_department():
     service = make_zone_service()
     assert service.get_sub_zones(department, "zone") == [department]
     assert service.get_sub_zones(department, "department") == [department]
-    assert [m.insee_code for m in service.get_sub_zones(department, "municipality")] == ["35238", "35047"]
+    assert [m.insee_code for m in service.get_sub_zones(department, "municipality")] == [
+        "35238",
+        "35047",
+    ]
 
 
 def test_sub_zones_unknown_level_is_400():
@@ -705,7 +732,9 @@ def test_valid_token_gives_user(jwt_secret):
 
 def test_invalid_token_is_401(jwt_secret):
     service = AuthService(FakeUserDao([ALICE]))
-    wrong_key = jwt.encode({"sub": "1"}, "autre-cle-de-test-assez-longue-pour-hs256", algorithm="HS256")
+    wrong_key = jwt.encode(
+        {"sub": "1"}, "autre-cle-de-test-assez-longue-pour-hs256", algorithm="HS256"
+    )
     expired = jwt.encode(
         {"sub": "1", "exp": datetime.now(UTC) - timedelta(hours=1)}, jwt_secret, algorithm="HS256"
     )

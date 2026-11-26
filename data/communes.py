@@ -44,7 +44,7 @@ def fetch_altitudes(lons: list[float], lats: list[float]) -> list[float | None]:
             return [None]
         # Un point hors couverture fait échouer tout le lot : on réessaie point par point
         print(f"   -> erreur sur un lot, nouvel essai point par point ({len(lons)} points)")
-        return [fetch_altitudes([lon], [lat])[0] for lon, lat in zip(lons, lats)]
+        return [fetch_altitudes([lon], [lat])[0] for lon, lat in zip(lons, lats, strict=True)]
     # L'IGN renvoie -99999 quand il ne connaît pas l'altitude
     return [z if z is not None and z > -1000 else None for z in altitudes]
 
@@ -74,7 +74,7 @@ def fetch_communes() -> pd.DataFrame:
         lats = [_coordonnees(c)[1] for c in lot]
         altitudes = fetch_altitudes(lons, lats)
 
-        for c, lon, lat, alti in zip(lot, lons, lats, altitudes):
+        for c, lon, lat, alti in zip(lot, lons, lats, altitudes, strict=True):
             lignes.append(
                 {
                     "code": c["code"],
@@ -95,6 +95,7 @@ def fetch_communes() -> pd.DataFrame:
 
 
 def main() -> None:
+    """Télécharge régions, départements et communes, puis les écrit en Parquet."""
     DOSSIER_DESTINATION.mkdir(exist_ok=True)
     tables = {
         "regions": fetch_regions(),

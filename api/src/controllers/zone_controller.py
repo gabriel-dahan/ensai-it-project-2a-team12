@@ -115,7 +115,11 @@ def update_zoning(
     """F4 : modifie la description et/ou les communes d'un zonage."""
     try:
         zoning = service.update_zoning(
-            user, zoning_id, request.description, request.add_codes_insee, request.remove_codes_insee
+            user,
+            zoning_id,
+            request.description,
+            request.add_codes_insee,
+            request.remove_codes_insee,
         )
     except SERVICE_ERRORS as exc:
         raise http_error(exc) from exc

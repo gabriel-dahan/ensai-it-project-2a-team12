@@ -25,7 +25,16 @@ from service.temperature_service import MAX_DISTANCE_KM
 router = APIRouter()
 service = DjuService()
 
-CSV_COLUMNS = ["zone", "zone_code", "mode", "period_start", "period_end", "value", "days_with_data", "observed_ratio"]
+CSV_COLUMNS = [
+    "zone",
+    "zone_code",
+    "mode",
+    "period_start",
+    "period_end",
+    "value",
+    "days_with_data",
+    "observed_ratio",
+]
 
 
 def to_items(calculation: DjuCalculation) -> list[DjuResultItem]:
@@ -73,8 +82,16 @@ def to_csv(rows: list[tuple[str, str | None, DjuCalculation]]) -> Response:
     for zone_name, code, calc in rows:
         for r in calc.results:
             writer.writerow(
-                [zone_name, code or "", calc.type.mode, r.period_start, r.period_end,
-                 r.value, r.days_with_data, r.observed_ratio]
+                [
+                    zone_name,
+                    code or "",
+                    calc.type.mode,
+                    r.period_start,
+                    r.period_end,
+                    r.value,
+                    r.days_with_data,
+                    r.observed_ratio,
+                ]
             )
     return Response(
         content=buffer.getvalue(),
@@ -113,7 +130,9 @@ def join_warnings(*warnings: str | None) -> str | None:
     return " ".join(w for w in warnings if w) or None
 
 
-def to_zone_response(calculations: list[DjuCalculation], warning: str | None = None) -> DjuZoneResponse:
+def to_zone_response(
+    calculations: list[DjuCalculation], warning: str | None = None
+) -> DjuZoneResponse:
     """Regroupe les calculs par sous-zone."""
     zones: dict[tuple, DjuZoneResult] = {}
     for calc in calculations:

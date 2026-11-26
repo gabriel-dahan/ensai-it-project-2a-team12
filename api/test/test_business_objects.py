@@ -25,13 +25,19 @@ def point_data(*days_and_means, not_observed=()):
 
 def zone_data(day, means_by_code, not_observed=()):
     """Températures d'un jour pour plusieurs communes : une colonne par code INSEE."""
-    means = pd.DataFrame({code: [mean] for code, mean in means_by_code.items()}, index=[day], dtype=float)
-    observed = pd.DataFrame({code: [code not in not_observed] for code in means_by_code}, index=[day])
+    means = pd.DataFrame(
+        {code: [mean] for code, mean in means_by_code.items()}, index=[day], dtype=float
+    )
+    observed = pd.DataFrame(
+        {code: [code not in not_observed] for code in means_by_code}, index=[day]
+    )
     return means, observed
 
 
 def calculation(start, end, time_step="day", zone=None):
-    return DjuCalculation(id=None, start_date=start, end_date=end, time_step=time_step, type=HEATING, zone=zone)
+    return DjuCalculation(
+        id=None, start_date=start, end_date=end, time_step=time_step, type=HEATING, zone=zone
+    )
 
 
 def days(start, end):
@@ -40,10 +46,13 @@ def days(start, end):
 
 
 def municipality(code, population):
-    return Municipality(id=None, name=code, insee_code=code, latitude=48.0, longitude=2.0, population=population)
+    return Municipality(
+        id=None, name=code, insee_code=code, latitude=48.0, longitude=2.0, population=population
+    )
 
 
 # DjuType
+
 
 def test_heating_value():
     assert HEATING.compute_daily_value(7) == 11
@@ -65,6 +74,7 @@ def test_value_on_a_whole_column():
 
 # DjuCalculation.run et aggregate
 
+
 def test_run_by_day():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 2))
     results = calc.run(*point_data((date(2024, 1, 2), 10), (date(2024, 1, 1), 8)))
@@ -75,11 +85,13 @@ def test_run_by_day():
 
 def test_run_ignores_missing_values_and_days_outside_period():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 31), "month")
-    results = calc.run(*point_data(
-        (date(2024, 1, 1), 10),
-        (date(2024, 1, 2), float("nan")),
-        (date(2024, 2, 1), 0),
-    ))
+    results = calc.run(
+        *point_data(
+            (date(2024, 1, 1), 10),
+            (date(2024, 1, 2), float("nan")),
+            (date(2024, 2, 1), 0),
+        )
+    )
     assert len(results) == 1
     assert results[0].value == 8
     assert results[0].days_with_data == 1
@@ -129,14 +141,18 @@ def test_unknown_time_step():
 
 def test_observed_ratio():
     calc = calculation(date(2024, 1, 1), date(2024, 1, 4), "month")
-    results = calc.run(*point_data(
-        *[(d, 8) for d in days(date(2024, 1, 1), date(2024, 1, 4))], not_observed=[date(2024, 1, 3)]
-    ))
+    results = calc.run(
+        *point_data(
+            *[(d, 8) for d in days(date(2024, 1, 1), date(2024, 1, 4))],
+            not_observed=[date(2024, 1, 3)],
+        )
+    )
     assert results[0].days_with_data == 4
     assert results[0].observed_ratio == 0.75
 
 
 # DjuCalculation.run_for_zone
+
 
 def test_run_for_zone_weighted_by_population():
     big, small = municipality("A", 300), municipality("B", 100)
@@ -165,7 +181,9 @@ def test_run_for_zone_all_populations_null_gives_simple_mean():
 def test_run_for_zone_uses_only_municipalities_with_data_that_day():
     zone = Zoning(id=1, name="Z", municipalities=[municipality("A", 100), municipality("B", 100)])
     calc = calculation(date(2024, 1, 1), date(2024, 1, 1), zone=zone)
-    results = calc.run_for_zone(*zone_data(date(2024, 1, 1), {"A": 10, "B": float("nan")}, not_observed=["B"]))
+    results = calc.run_for_zone(
+        *zone_data(date(2024, 1, 1), {"A": 10, "B": float("nan")}, not_observed=["B"])
+    )
     assert results[0].value == 8
     assert results[0].observed_ratio == 1  # B n'a pas de valeur, elle ne compte pas
 
@@ -179,13 +197,16 @@ def test_run_for_zone_uses_only_columns_of_its_municipalities():
 
 # Géographie
 
+
 def test_haversine_paris_lyon():
     assert haversine_km(48.8566, 2.3522, 45.7640, 4.8357) == pytest.approx(392, abs=2)
 
 
 def test_haversine_on_arrays():
     """Même fonction pour une distance ou pour un lieu face à toutes les stations."""
-    distances = haversine_km(48.8566, 2.3522, np.array([45.7640, 48.8566]), np.array([4.8357, 2.3522]))
+    distances = haversine_km(
+        48.8566, 2.3522, np.array([45.7640, 48.8566]), np.array([4.8357, 2.3522])
+    )
     assert distances == pytest.approx([392, 0], abs=2)
 
 
@@ -217,6 +238,7 @@ def test_zone_type():
 
 
 # Utilisateur
+
 
 def test_check_password():
     user = User(username="alice", password="secret")

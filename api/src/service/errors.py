@@ -5,6 +5,7 @@ class ServiceError(Exception):
     """Erreur métier avec le code HTTP à renvoyer."""
 
     def __init__(self, message: str, status_code: int = 400) -> None:
+        """Garde le message et le code HTTP de l'erreur."""
         super().__init__(message)
         self.message = message
         self.status_code = status_code

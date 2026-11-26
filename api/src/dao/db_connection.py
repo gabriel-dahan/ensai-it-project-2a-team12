@@ -1,3 +1,5 @@
+"""Connexion à PostgreSQL, partagée par toutes les DAO."""
+
 import os
 import time
 from pathlib import Path
@@ -8,20 +10,23 @@ from psycopg2.extras import RealDictCursor
 
 from utils.singleton import Singleton
 
-# Charge le .env..
+# .env à la racine du dépôt (api/src/dao/db_connection.py -> ../../../.env)
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 IDLE_BEFORE_CHECK = 30  # secondes
+
 
 class DBConnection(metaclass=Singleton):
     """Connexion unique à PostgreSQL, partagée par toutes les DAO."""
 
     def __init__(self):
+        """Ouvre la connexion au premier appel (une seule instance grâce au singleton)."""
         self.__connection = self._connect()
         self.__last_use = time.monotonic()
 
     @staticmethod
     def _connect():
+        """Ouvre une connexion avec les paramètres du fichier .env."""
         return psycopg2.connect(
             host=os.environ["POSTGRES_HOST"],
             port=os.environ["POSTGRES_PORT"],
@@ -37,6 +42,7 @@ class DBConnection(metaclass=Singleton):
         )
 
     def _is_alive(self) -> bool:
+        """Vrai si la connexion est utilisable ; testée par un SELECT 1 après 30 s d'inactivité."""
         if self.__connection.closed:
             return False
         if time.monotonic() - self.__last_use < IDLE_BEFORE_CHECK:

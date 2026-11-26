@@ -1,3 +1,5 @@
+"""DAO des types de DJU et des calculs enregistrés."""
+
 from datetime import date
 
 from psycopg2.extras import execute_values
@@ -148,7 +150,7 @@ class DjuDao(metaclass=Singleton):
                     fetch=True,
                 )
 
-        for result, row in zip(calculation.results, rows):
+        for result, row in zip(calculation.results, rows, strict=True):
             result.id = row["id"]
         calculation.id = calculation_id
         return calculation_id

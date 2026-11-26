@@ -61,8 +61,14 @@ def make_calculation(mode, zone=None, value=5.0):
 
 
 # Station à 0,1° de latitude au nord du point de POINT_BODY, soit environ 11,1 km
-STATION = MeteoStation(id=1, station_code="35281001", name="RENNES-ST JACQUES",
-                       latitude=48.2, longitude=-1.7, altitude=36.0)
+STATION = MeteoStation(
+    id=1,
+    station_code="35281001",
+    name="RENNES-ST JACQUES",
+    latitude=48.2,
+    longitude=-1.7,
+    altitude=36.0,
+)
 
 
 def make_point_calculation(mode, value, stations=(STATION,)):
@@ -90,8 +96,10 @@ class FakeDjuService:
 
     def calculate_point_dju(self, request):
         self.calls.append(request)
-        return {"heating": make_point_calculation("heating", 10.0, self.stations),
-                "cooling": make_point_calculation("cooling", 0.0, self.stations)}
+        return {
+            "heating": make_point_calculation("heating", 10.0, self.stations),
+            "cooling": make_point_calculation("cooling", 0.0, self.stations),
+        }
 
     def calculate_zone_dju(self, request, user):
         self.calls.append((request, user))
@@ -111,8 +119,10 @@ class FakeZoneService:
 
     def list_public_zones(self, zone_type):
         self.calls.append(("list", zone_type))
-        return [Region(id=1, name="Bretagne", insee_code="53"),
-                Department(id=35, name="Ille-et-Vilaine", insee_code="35", region_id=1)]
+        return [
+            Region(id=1, name="Bretagne", insee_code="53"),
+            Department(id=35, name="Ille-et-Vilaine", insee_code="35", region_id=1),
+        ]
 
     def get_zone(self, zone_type, zone_code, user=None):
         self.calls.append(("get", zone_type, zone_code))
@@ -183,15 +193,28 @@ def logged_in():
 # Général
 
 
-def test_health(client):
+def test_health(client, monkeypatch):
+    monkeypatch.setattr(main, "database_is_reachable", lambda: True)
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "database": "ok"}
+
+
+def test_health_database_unreachable(client, monkeypatch):
+    monkeypatch.setattr(main, "database_is_reachable", lambda: False)
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.json() == {"status": "error", "database": "unreachable"}
 
 
 def test_routes_are_not_async():
-    routers = [main.app.router, dju_controller.router, zone_controller.router,
-               zone_controller.user_router, user_controller.router]
+    routers = [
+        main.app.router,
+        dju_controller.router,
+        zone_controller.router,
+        zone_controller.user_router,
+        user_controller.router,
+    ]
     routes = [r for router in routers for r in router.routes if isinstance(r, APIRoute)]
     assert len(routes) == 14
     for route in routes:
@@ -228,13 +251,15 @@ def test_point_json(client, dju_service):
     assert response.status_code == 200
     body = response.json()
     assert set(body["results"]) == {"heating", "cooling"}
-    assert body["results"]["heating"] == [{
-        "period_start": "2024-01-01",
-        "period_end": "2024-01-01",
-        "value": 10.0,
-        "days_with_data": 1,
-        "observed_ratio": 1.0,
-    }]
+    assert body["results"]["heating"] == [
+        {
+            "period_start": "2024-01-01",
+            "period_end": "2024-01-01",
+            "value": 10.0,
+            "days_with_data": 1,
+            "observed_ratio": 1.0,
+        }
+    ]
 
 
 def test_point_warning_when_period_is_cut(client, dju_service):
@@ -282,7 +307,10 @@ def test_point_csv(client, dju_service):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     lines = response.text.strip().splitlines()
-    assert lines[0] == "zone,zone_code,mode,period_start,period_end,value,days_with_data,observed_ratio"
+    assert (
+        lines[0]
+        == "zone,zone_code,mode,period_start,period_end,value,days_with_data,observed_ratio"
+    )
     assert lines[1] == "point,,heating,2024-01-01,2024-01-01,10.0,1,1.0"
     assert len(lines) == 3
 
@@ -365,7 +393,9 @@ def test_zone_detail_rejects_zoning(client, zone_service):
 
 def test_zonings_require_token(client, zone_service):
     assert client.get("/user/zones").status_code == 401
-    assert client.post("/user/zones", json={"name": "a", "codes_insee": ["35238"]}).status_code == 401
+    assert (
+        client.post("/user/zones", json={"name": "a", "codes_insee": ["35238"]}).status_code == 401
+    )
 
 
 def test_list_my_zonings(client, zone_service, logged_in):
@@ -442,7 +472,6 @@ def test_login_wrong_password(client, monkeypatch):
     assert response.status_code == 401
 
 
-
 def test_register_password_too_short_is_422(client, monkeypatch):
     monkeypatch.setattr(user_controller, "service", FakeAuthService())
     response = client.post("/user/register", json={"username": "bob", "password": "court"})
@@ -475,5 +504,7 @@ def test_point_latitude_out_of_range_is_422(client, dju_service):
 
 @pytest.mark.parametrize("number_of_stations", [0, 11])
 def test_point_number_of_stations_out_of_range_is_422(client, dju_service, number_of_stations):
-    response = client.post("/dju/point", json={**POINT_BODY, "number_of_stations": number_of_stations})
+    response = client.post(
+        "/dju/point", json={**POINT_BODY, "number_of_stations": number_of_stations}
+    )
     assert response.status_code == 422

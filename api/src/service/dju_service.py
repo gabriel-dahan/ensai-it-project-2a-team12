@@ -17,6 +17,7 @@ class DjuService:
     """Crée les calculs DJU et utilise le cache des calculs pour les territoires."""
 
     def __init__(self, temperature_service=None, zone_service=None, dju_dao=None):
+        """Les dépendances peuvent être remplacées par des objets factices dans les tests."""
         self.temperature_service = temperature_service or TemperatureService()
         self.zone_service = zone_service or ZoneService()
         self.dju_dao = dju_dao or DjuDao()
@@ -87,7 +88,9 @@ class DjuService:
             calculations[mode] = calculation
         return calculations
 
-    def calculate_zone_dju(self, request: DjuZoneRequest, user: User | None) -> list[DjuCalculation]:
+    def calculate_zone_dju(
+        self, request: DjuZoneRequest, user: User | None
+    ) -> list[DjuCalculation]:
         """Un calcul par sous-zone et par seuil, relu du cache ou calculé puis enregistré."""
         thresholds, start_date, end_date = self._check_request(request)
         zone = self.zone_service.get_zone(request.zone_type, request.zone_code, user)
@@ -137,7 +140,9 @@ class DjuService:
         # 2. Les températures de toutes les communes à calculer sont estimées en une fois
         if to_compute:
             municipalities = {
-                m.insee_code: m for calculation in to_compute for m in calculation.zone.get_municipalities()
+                m.insee_code: m
+                for calculation in to_compute
+                for m in calculation.zone.get_municipalities()
             }
             means, observed = self.temperature_service.get_municipality_temperatures(
                 list(municipalities.values()),

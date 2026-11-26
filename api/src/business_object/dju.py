@@ -25,11 +25,15 @@ def period_bounds(day: date, time_step: str) -> tuple[date, date]:
         return date(day.year, day.month, 1), date(day.year, day.month, last_day)
     if time_step == "year":
         return date(day.year, 1, 1), date(day.year, 12, 31)
-    raise ValueError(f"Type de période inconnue : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
+    raise ValueError(
+        f"Type de période inconnue : {time_step!r} (attendu : {', '.join(TIME_STEPS)})"
+    )
 
 
 @dataclass
 class DjuType:
+    """Type de DJU : chauffage ou climatisation, avec sa température seuil."""
+
     id: int | None
     name: str
     base_temperature: float
@@ -45,11 +49,14 @@ class DjuType:
         return np.maximum(0.0, t_mean - self.base_temperature)
 
     def is_heating(self) -> bool:
+        """Vrai pour des DJU de chauffage, faux pour la climatisation."""
         return self.mode == "heating"
 
 
 @dataclass
 class DjuResult:
+    """DJU cumulés sur une période (jour, semaine, mois ou année)."""
+
     id: int | None
     period_start: date
     period_end: date
@@ -60,6 +67,8 @@ class DjuResult:
 
 @dataclass
 class DjuCalculation:
+    """Calcul DJU sur un point GPS ou une zone, avec ses paramètres et ses résultats."""
+
     id: int | None
     start_date: date
     end_date: date
@@ -75,7 +84,9 @@ class DjuCalculation:
     results: list[DjuResult] = field(default_factory=list)
     candidate_stations: list[MeteoStation] = field(default_factory=list)
     # DJU de chaque jour : date -> (valeur, observé)
-    daily_values: dict[date, tuple[float, bool]] = field(default_factory=dict, init=False, repr=False, compare=False)
+    daily_values: dict[date, tuple[float, bool]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def run(self, daily_means: pd.Series, daily_observed: pd.Series) -> list[DjuResult]:
         """Calcule les DJU d'un point à partir de ses températures moyennes journalières.
@@ -96,12 +107,15 @@ class DjuCalculation:
         municipalities = self.zone.get_municipalities()
 
         # Poids = population (0 si inconnue) ; si tous les poids sont nuls, poids 1 pour tous
-        weights = {m.insee_code: m.population if m.population and m.population > 0 else 0
-                   for m in municipalities}
+        weights = {
+            m.insee_code: m.population if m.population and m.population > 0 else 0
+            for m in municipalities
+        }
         if all(w == 0 for w in weights.values()):
             weights = {code: 1 for code in weights}
-        weights = pd.Series({code: w for code, w in weights.items() if w > 0 and code in means.columns},
-                            dtype=float)
+        weights = pd.Series(
+            {code: w for code, w in weights.items() if w > 0 and code in means.columns}, dtype=float
+        )
         codes = list(weights.index)
 
         # DJU de chaque commune chaque jour, puis moyenne pondérée sur les communes qui ont une valeur
@@ -120,7 +134,10 @@ class DjuCalculation:
         self.daily_values = {
             day: (float(value), bool(is_observed))
             for day, value, is_observed in zip(
-                daily_dju.index[known], daily_dju.to_numpy()[known], daily_observed.to_numpy()[known]
+                daily_dju.index[known],
+                daily_dju.to_numpy()[known],
+                daily_observed.to_numpy()[known],
+                strict=True,
             )
             if self.start_date <= day <= self.end_date
         }
@@ -131,7 +148,9 @@ class DjuCalculation:
     def aggregate(self, time_step: str) -> list[DjuResult]:
         """Cumule les DJU journaliers par jour, semaine, mois ou année."""
         if time_step not in TIME_STEPS:
-            raise ValueError(f"Pas de temps inconnu : {time_step!r} (attendu : {', '.join(TIME_STEPS)})")
+            raise ValueError(
+                f"Pas de temps inconnu : {time_step!r} (attendu : {', '.join(TIME_STEPS)})"
+            )
 
         # Clé = (début, fin) de la période, ramenés à [start_date, end_date]
         groups: dict[tuple[date, date], list[tuple[float, bool]]] = {}

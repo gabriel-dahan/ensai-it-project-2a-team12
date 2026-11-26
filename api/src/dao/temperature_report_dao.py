@@ -1,3 +1,5 @@
+"""DAO des relevés quotidiens de température."""
+
 from datetime import date
 
 import pandas as pd
@@ -12,6 +14,7 @@ class TemperatureReportDao(metaclass=Singleton):
     """Accès aux relevés quotidiens des stations."""
 
     def __init__(self):
+        """Période des relevés, lue en base au premier appel."""
         self._date_range = None
 
     def get_date_range(self) -> tuple[date | None, date | None]:

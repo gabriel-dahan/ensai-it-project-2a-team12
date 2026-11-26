@@ -17,7 +17,10 @@ def haversine_km(lat1, lon1, lat2, lon2):
     calculer en une fois la distance d'un lieu à toutes les stations.
     """
     lat1, lon1, lat2, lon2 = map(np.radians, (lat1, lon1, lat2, lon2))
-    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    a = (
+        np.sin((lat2 - lat1) / 2) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    )
     return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
@@ -36,35 +39,45 @@ class GeographicZone(ABC):
 
 @dataclass
 class Region(GeographicZone):
+    """Région française, composée de départements."""
+
     insee_code: str
     departments: list["Department"] = field(default_factory=list)
     zone_type = "region"
 
     def get_municipalities(self) -> list["Municipality"]:
+        """Communes de tous les départements de la région."""
         return [m for dept in self.departments for m in dept.get_municipalities()]
 
     def add_department(self, department: "Department") -> None:
+        """Rattache le département à la région."""
         department.region_id = self.id
         self.departments.append(department)
 
 
 @dataclass
 class Department(GeographicZone):
+    """Département français, composé de communes."""
+
     insee_code: str
     region_id: int | None = None
     municipalities: list["Municipality"] = field(default_factory=list)
     zone_type = "department"
 
     def get_municipalities(self) -> list["Municipality"]:
+        """Communes du département."""
         return list(self.municipalities)
 
     def add_municipality(self, municipality: "Municipality") -> None:
+        """Rattache la commune au département."""
         municipality.department_id = self.id
         self.municipalities.append(municipality)
 
 
 @dataclass
 class Municipality(GeographicZone):
+    """Commune, placée à sa mairie (ou à son centre), avec son altitude et sa population."""
+
     insee_code: str
     latitude: float
     longitude: float
@@ -74,6 +87,7 @@ class Municipality(GeographicZone):
     zone_type = "municipality"
 
     def get_municipalities(self) -> list["Municipality"]:
+        """Une commune ne couvre qu'elle-même."""
         return [self]
 
 
@@ -99,6 +113,7 @@ class Zoning(GeographicZone):
         ]
 
     def get_municipalities(self) -> list[Municipality]:
+        """Communes du zonage."""
         return list(self.municipalities)
 
     def is_owned_by(self, user) -> bool:

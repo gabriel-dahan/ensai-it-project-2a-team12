@@ -1,3 +1,5 @@
+"""DAO des zonages personnalisés."""
+
 from datetime import date
 
 from business_object.geo_zone import Zoning
@@ -16,7 +18,12 @@ class ZoningDao(metaclass=Singleton):
                 cursor.execute(
                     "INSERT INTO zonings (name, description, created_at, user_id) "
                     "VALUES (%s, %s, %s, %s) RETURNING id",
-                    (zoning.name, zoning.description, zoning.created_at or date.today(), zoning.owner_id),
+                    (
+                        zoning.name,
+                        zoning.description,
+                        zoning.created_at or date.today(),
+                        zoning.owner_id,
+                    ),
                 )
                 zoning.id = cursor.fetchone()["id"]
                 self._insert_links(cursor, zoning)
@@ -39,7 +46,9 @@ class ZoningDao(metaclass=Singleton):
                     "UPDATE zonings SET name = %s, description = %s WHERE id = %s",
                     (zoning.name, zoning.description, zoning.id),
                 )
-                cursor.execute("DELETE FROM zoning_municipalities WHERE zoning_id = %s", (zoning.id,))
+                cursor.execute(
+                    "DELETE FROM zoning_municipalities WHERE zoning_id = %s", (zoning.id,)
+                )
                 self._insert_links(cursor, zoning)
 
     def delete(self, zoning_id: int) -> bool:

@@ -1,3 +1,5 @@
+"""DAO des stations météo."""
+
 from business_object.meteo_station import MeteoStation
 from dao.db_connection import DBConnection
 from utils.singleton import Singleton
@@ -7,6 +9,7 @@ class MeteoStationDao(metaclass=Singleton):
     """Accès aux stations météo (gardées en mémoire après le premier chargement)."""
 
     def __init__(self):
+        """Cache des stations, vide jusqu'à la première lecture."""
         self._stations = []
 
     def get_all_stations(self) -> list[MeteoStation]:

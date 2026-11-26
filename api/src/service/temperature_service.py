@@ -25,6 +25,7 @@ class TemperatureService:
     """Sélection des stations et pondération inverse à la distance, pour plusieurs lieux à la fois."""
 
     def __init__(self, station_dao=None, report_dao=None):
+        """Les DAO peuvent être remplacées par des objets factices dans les tests."""
         self.station_dao = station_dao or MeteoStationDao()
         self.report_dao = report_dao or TemperatureReportDao()
 
@@ -86,7 +87,10 @@ class TemperatureService:
         return selection
 
     def estimate_daily_temperatures(
-        self, locations: Locations, stations_by_location: dict[str, list[MeteoStation]], reports: pd.DataFrame
+        self,
+        locations: Locations,
+        stations_by_location: dict[str, list[MeteoStation]],
+        reports: pd.DataFrame,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Température moyenne estimée de chaque lieu, jour par jour (pondération 1/d²).
 
@@ -96,7 +100,9 @@ class TemperatureService:
         """
         # Une ligne par date, une colonne par station
         means_by_station = reports.pivot(index="date", columns="station_id", values="temp_mean")
-        observed_by_station = reports.pivot(index="date", columns="station_id", values="observed").eq(True)
+        observed_by_station = reports.pivot(
+            index="date", columns="station_id", values="observed"
+        ).eq(True)
 
         means, observed = {}, {}
         for key, (lat, lon, altitude) in locations.items():
@@ -109,13 +115,17 @@ class TemperatureService:
             if altitude is not None:
                 # Correction de -0,65 °C par 100 m ; aucune si l'altitude de la station est inconnue
                 station_altitudes = np.array(
-                    [s.altitude if s.altitude is not None else altitude for s in stations], dtype=float
+                    [s.altitude if s.altitude is not None else altitude for s in stations],
+                    dtype=float,
                 )
                 values = values - LAPSE_RATE * (altitude - station_altitudes)
 
             # Poids calculés une seule fois pour toute la période
             distances = haversine_km(
-                lat, lon, np.array([s.latitude for s in stations]), np.array([s.longitude for s in stations])
+                lat,
+                lon,
+                np.array([s.latitude for s in stations]),
+                np.array([s.longitude for s in stations]),
             )
             weights = 1 / np.maximum(distances, MIN_DISTANCE_KM) ** 2
 
@@ -130,7 +140,9 @@ class TemperatureService:
         index = means_by_station.index
         columns = list(locations)
         means_table = pd.DataFrame(means, index=index).reindex(columns=columns)
-        observed_table = pd.DataFrame(observed, index=index).reindex(columns=columns, fill_value=False)
+        observed_table = pd.DataFrame(observed, index=index).reindex(
+            columns=columns, fill_value=False
+        )
         return means_table, observed_table
 
     def get_municipality_temperatures(
@@ -146,5 +158,7 @@ class TemperatureService:
             m.insee_code: (m.latitude, m.longitude, m.altitude if use_altitude else None)
             for m in municipalities
         }
-        stations, reports = self.find_candidate_stations(locations, number_of_stations, start_date, end_date)
+        stations, reports = self.find_candidate_stations(
+            locations, number_of_stations, start_date, end_date
+        )
         return self.estimate_daily_temperatures(locations, stations, reports)

@@ -1,0 +1,2 @@
+# Mêmes règles ruff que l'API (api/pyproject.toml)
+extend = "../api/pyproject.toml"

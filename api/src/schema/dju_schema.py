@@ -19,7 +19,9 @@ class DjuPointRequest(BaseModel):
     start_date: date
     end_date: date
     heating_threshold: float | None = Field(default=None, description="Seuil de chauffage en °C")
-    cooling_threshold: float | None = Field(default=None, description="Seuil de climatisation en °C")
+    cooling_threshold: float | None = Field(
+        default=None, description="Seuil de climatisation en °C"
+    )
     number_of_stations: int = Field(default=3, ge=1, le=10)
     time_step: TimeStep = "day"
 
@@ -39,7 +41,9 @@ class DjuZoneRequest(BaseModel):
     start_date: date
     end_date: date
     heating_threshold: float | None = Field(default=None, description="Seuil de chauffage en °C")
-    cooling_threshold: float | None = Field(default=None, description="Seuil de climatisation en °C")
+    cooling_threshold: float | None = Field(
+        default=None, description="Seuil de climatisation en °C"
+    )
     number_of_stations: int = Field(default=3, ge=1, le=10)
     use_altitude: bool = True
     time_step: TimeStep = "day"

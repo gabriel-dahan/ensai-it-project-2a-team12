@@ -6,6 +6,8 @@ from .geo_zone import Zoning
 
 
 class User:
+    """Compte utilisateur ; le mot de passe n'est gardé que sous forme de hash bcrypt."""
+
     def __init__(self, username: str, password: str, id: int | None = None) -> None:
         """Crée un utilisateur et hache son mot de passe avec bcrypt."""
         self.username = username
@@ -25,6 +27,7 @@ class User:
 
     @property
     def id(self) -> int | None:
+        """Identifiant en base (None avant l'enregistrement)."""
         return self.__id
 
     @id.setter
@@ -37,11 +40,12 @@ class User:
         return self.__password.decode("utf-8")
 
     def check_password(self, password: str) -> bool:
+        """Vrai si le mot de passe correspond au hash enregistré."""
         encoded = password.encode("utf-8")
         if len(encoded) > 72:  # impossible à l'inscription : ne peut pas correspondre
             return False
         return bcrypt.checkpw(encoded, self.__password)
-        
+
     def create_zoning(self, name: str, description: str | None = None) -> Zoning:
         """Nouveau zonage (vide) appartenant à cet utilisateur."""
         return Zoning(id=None, name=name, description=description, owner_id=self.id)

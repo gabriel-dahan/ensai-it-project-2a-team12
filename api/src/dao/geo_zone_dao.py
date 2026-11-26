@@ -1,10 +1,11 @@
+"""DAO des régions, départements et communes."""
+
 from business_object.geo_zone import Department, Municipality, Region
 from dao.db_connection import DBConnection
 from utils.singleton import Singleton
 
 MUNICIPALITY_COLUMNS = (
-    "m.id, m.insee_code, m.name, m.latitude, m.longitude, "
-    "m.altitude, m.population, m.department_id"
+    "m.id, m.insee_code, m.name, m.latitude, m.longitude, m.altitude, m.population, m.department_id"
 )
 
 
@@ -37,7 +38,9 @@ class GeoZoneDao(metaclass=Singleton):
         )
         return [self._to_department(row) for row in rows]
 
-    def get_region_by_insee(self, insee_code: str, with_municipalities: bool = False) -> Region | None:
+    def get_region_by_insee(
+        self, insee_code: str, with_municipalities: bool = False
+    ) -> Region | None:
         """Renvoie la région de ce code INSEE avec ses départements (et leurs communes si demandé), ou None."""
         rows = self._fetch_all(
             "SELECT id, insee_code, name FROM regions WHERE insee_code = %s", (insee_code,)
@@ -116,10 +119,12 @@ class GeoZoneDao(metaclass=Singleton):
 
     @staticmethod
     def _to_region(row: dict) -> Region:
+        """Transforme une ligne de regions en Region."""
         return Region(id=row["id"], name=row["name"], insee_code=row["insee_code"])
 
     @staticmethod
     def _to_department(row: dict) -> Department:
+        """Transforme une ligne de departments en Department."""
         return Department(
             id=row["id"],
             name=row["name"],

@@ -1,40 +1,45 @@
-# DJU API
+# DJU project: degree days from Météo-France data
 
-A FastAPI application that computes **Degree Days** (DJU, *degrés-jours unifiés*) from Météo-France weather records, for a GPS point, a French department or region, or a user-defined zoning.
+This project computes **degree days** (DJU, *degrés-jours unifiés*) anywhere in France, from the daily records of Météo-France weather stations. Degree days measure how cold or hot a period was compared with a threshold temperature; they are used to analyse the energy consumption related to heating and cooling.
 
-Degree days measure how cold or hot a period was compared with a threshold temperature. They are used to analyse the energy consumption related to heating and cooling.
+The project has two parts:
+
+- a **data pipeline** (`data/`) that downloads the weather records and the French territory, cleans them and loads them into PostgreSQL;
+- a **REST API** (`api/`, FastAPI) that computes DJU at a GPS point, over a department, a region or a zoning defined by a user. Its own README, [api/README.md](api/README.md), lists the routes and explains how to run, use and test it.
 
 Project carried out by Team 12 as part of the second-year IT project at ENSAI.
 
+## Contents
+
+- [Features](#features)
+- [How DJU are computed](#how-dju-are-computed)
+- [Data](#data)
+- [Repository structure](#repository-structure)
+- [Getting started](#getting-started)
+- [Loading the data](#loading-the-data)
+- [Tests and code quality](#tests-and-code-quality)
+- [Documentation](#documentation)
+
 ## Features
 
-| Id | Feature | Route |
-|----|---------|-------|
-| F1 | DJU at a GPS point (latitude, longitude, optional altitude) | `POST /dju/point` |
-| F2 | List of regions and departments, and the municipalities of each one | `GET /zones`, `GET /zones/{type}/{insee_code}` |
-| F3 | DJU over a department, a region or a personal zoning | `POST /dju/zone` |
-| F4 | Create, list, edit and delete personal zonings (lists of municipalities) | `/user/zones` |
-| FO3 | Import a zoning from a CSV or JSON file | `POST /user/zones/import` |
-| — | Account creation and login (JWT) | `POST /user/register`, `POST /user/login` |
+| Id | Feature |
+|----|---------|
+| F1 | DJU at a GPS point (latitude, longitude, optional altitude) |
+| F2 | List of regions and departments, and the municipalities of each one |
+| F3 | DJU over a department, a region or a personal zoning |
+| F4 | Create, list, edit and delete personal zonings (lists of municipalities), with a user account |
+| FO1 | Zone calculations are stored and read back when the same request comes again |
+| FO2 | Results as JSON or CSV |
+| FO3 | Import a zoning from a CSV or JSON file |
 
-Calculation options:
+Calculations accept a heating and/or a cooling threshold, any period from 1990 onwards, a time step (day, week, month or year), the number of stations used and an altitude correction. Each result gives the DJU value, the number of days actually computed and the share of those days based only on observed (not filled-in) values.
 
-- heating threshold and/or cooling threshold (at least one is required);
-- any period covered by the data, from 1990 onwards; a period that goes beyond the available data is shortened and the response includes a `warning`;
-- time step: `day`, `week` (ISO week, Monday to Sunday), `month` or `year`;
-- number of nearby weather stations used (1 to 10, default 3);
-- altitude correction (on by default for zones, applied at a point when an altitude is given);
-- for a zone, results for the whole zone, per department (regions only) or per municipality;
-- JSON output by default, or CSV with `?format=csv`.
-
-Each result gives the DJU value of the period, the number of days actually computed (`days_with_data`) and the share of those days based only on observed values (`observed_ratio`), the rest coming from filled-in values.
-
-Zone calculations are stored in the database and read back when the same request comes again. Editing or deleting a zoning removes its stored calculations.
+The corresponding routes are listed in [api/README.md](api/README.md#routes).
 
 ## How DJU are computed
 
 1. **Daily mean temperature** of a station: `(Tmin + Tmax) / 2`.
-2. **Temperature at a location**: the *n* nearest stations that have records over the period are selected (distances computed with the Haversine formula). Stations without any data on the period are skipped and replaced by the next nearest ones. Each day, the location temperature is the inverse distance weighted mean (weights `1 / d²`) of the stations that have a value that day.
+2. **Temperature at a location**: the *n* nearest stations that have records over the period, within 50 km, are selected (distances computed with the Haversine formula). Stations without any data on the period are skipped and replaced by the next nearest ones. Each day, the location temperature is the inverse distance weighted mean (weights `1 / d²`) of the stations that have a value that day.
 3. **Altitude correction**: each station temperature is shifted by −0.65 °C per 100 m of altitude difference between the location and the station.
 4. **Daily DJU**: `max(0, threshold − T)` for heating, `max(0, T − threshold)` for cooling.
 5. **Zones**: the temperature of each municipality is estimated at its town hall, its daily DJU computed, then averaged over the municipalities of the zone, weighted by population (equal weights if no population is known).
@@ -61,115 +66,117 @@ The data are downloaded from open data sources:
 - nearby stations are the 5 closest stations within 50 km, so an isolated station may have fewer neighbours, or none;
 - a filled value that gives `Tmin > Tmax` is removed.
 
-The origin of each value is kept in the `SOURCE_TMIN` / `SOURCE_TMAX` columns, and loaded as the `observed` flag of each record. This is what `observed_ratio` is based on.
+The origin of each value is kept in the `SOURCE_TMIN` / `SOURCE_TMAX` columns, and loaded as the `observed` flag of each record. This is what the `observed_ratio` of the results is based on.
 
-## Architecture
+### Database
 
-The application follows a layered architecture, based on the ENSAI second-year IT project template:
+The schema is in [data/init_db.sql](data/init_db.sql):
+
+| Tables | Content |
+|--------|---------|
+| `regions`, `departments`, `municipalities` | French territory (INSEE codes, town hall coordinates, altitude, population) |
+| `meteo_stations`, `temperature_reports` | Météo-France stations and their daily `tmin` / `tmax`, with the origin of each value |
+| `users`, `zonings`, `zoning_municipalities` | User accounts and personal zonings |
+| `dju_types`, `dju_calculations`, `dju_results` | Stored zone calculations (cache) |
+
+## Repository structure
 
 ```
-api/src/
-├── main.py            entry point (FastAPI app, routers, /health)
-├── controllers/       routes, authentication dependencies, CSV export
-├── schema/            Pydantic request and response models
-├── service/           business logic (DJU, temperatures, zones, authentication)
-├── business_object/   DJU calculation, zones, stations, temperature records, users
-├── dao/               PostgreSQL access (psycopg2)
-└── utils/             singleton for the database connection
+.
+├── README.md              this file: the project as a whole
+├── .env.example           template of the .env file, shared by the API and the data scripts
+├── api/                   the FastAPI application (see api/README.md)
+│   ├── README.md
+│   ├── pyproject.toml     dependencies, pytest, coverage and ruff settings
+│   ├── src/               source code, one folder per layer
+│   └── test/
+├── data/                  data pipeline
+│   ├── meteo.py           download of the Météo-France records
+│   ├── qualite_meteo.py   outliers and missing values
+│   ├── communes.py        download of regions, departments and municipalities
+│   ├── init_db.sql        database schema
+│   ├── init_db.py         creation and loading of the database
+│   ├── data_visualisation.py
+│   ├── test_data.py
+│   ├── requirements.txt
+│   └── raw_data/          generated Parquet files (not versioned)
+└── doc/
+    ├── reports/           interim and final reports (Quarto) and their diagrams
+    ├── tracking/          weekly progress notes
+    ├── new_diagram.md     current diagrams (Mermaid)
+    └── archive_old/       first diagrams, kept for history only
 ```
 
-| Layer | Files |
-|-------|-------|
-| business_object | `dju.py`, `geo_zone.py`, `meteo_station.py`, `temperature_report.py`, `user.py` |
-| dao | `db_connection.py`, `dju_dao.py`, `geo_zone_dao.py`, `meteo_station_dao.py`, `temperature_report_dao.py`, `user_dao.py`, `zoning_dao.py` |
-| service | `auth_service.py`, `dju_service.py`, `errors.py`, `temperature_service.py`, `zone_service.py` |
-| controllers | `dependencies.py`, `dju_controller.py`, `user_controller.py`, `zone_controller.py` |
-| schema | `dju_schema.py`, `user_schema.py`, `zone_schema.py` |
-
-The database schema is in [data/init_db.sql](data/init_db.sql): users, regions, departments, municipalities, zonings, weather stations, temperature records, DJU types, calculations and results.
-
-## Installation
+## Getting started
 
 Python 3.13 or later and a PostgreSQL database are required. From the root of the repository:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-pip install -e "api[dev]"
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e "api[dev]"          # API, with pytest, httpx, ruff and coverage
 pip install -r data/requirements.txt
+cp .env.example .env               # then fill it in
 ```
 
-Create a `.env` file at the root of the repository:
+The `.env` file is read from the root of the repository by both the API and the data scripts:
 
-```
-POSTGRES_HOST=...
-POSTGRES_PORT=5432
-POSTGRES_DATABASE=...
-POSTGRES_USER=...
-POSTGRES_PASSWORD=...
-POSTGRES_SCHEMA=...
+| Variable | Meaning |
+|----------|---------|
+| `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL connection |
+| `POSTGRES_SCHEMA` | Schema that holds the tables |
+| `JWT_SECRET` | Secret key used to sign login tokens (any long random string) |
+| `UVICORN_HOST`, `UVICORN_PORT` | Address of the API (default `0.0.0.0:5001`) |
 
-JWT_SECRET=a-long-secret-string
+Then:
 
-UVICORN_HOST=0.0.0.0
-UVICORN_PORT=5001
-# ROOT_PATH=/prefix   (optional, when the API is served behind a proxy)
-```
+1. load the data into the database (next section), once;
+2. start the API: `cd api/src && python main.py`, then open http://localhost:5001/docs. See [api/README.md](api/README.md) for the routes and examples.
 
 ## Loading the data
 
 The scripts of the `data/` folder are run once, in this order, from the root of the repository:
 
-```bash
-python data/meteo.py          # Météo-France records    -> raw_data/meteo_france_brut.parquet
-python data/qualite_meteo.py  # outliers and gaps       -> raw_data/meteo_france_nettoye.parquet
-python data/communes.py       # regions, departments, municipalities -> raw_data/*.parquet
-python data/init_db.py        # creates the tables (init_db.sql) and fills them from the Parquet files
-```
+| Script | Input | Output |
+|--------|-------|--------|
+| `python data/meteo.py` | Météo-France open data (data.gouv.fr) | `raw_data/meteo_france_brut.parquet` |
+| `python data/qualite_meteo.py` | raw weather file | `raw_data/meteo_france_nettoye.parquet` (outliers removed, gaps filled) |
+| `python data/communes.py` | `geo.api.gouv.fr`, IGN altimetry service | `raw_data/regions.parquet`, `departements.parquet`, `communes.parquet` |
+| `python data/init_db.py` | Parquet files, `init_db.sql` | tables created and filled |
 
-- `meteo.py` accepts a list of departments, e.g. `python data/meteo.py 22 29 35 56`; without arguments, all departments are downloaded. Downloads are saved per department, so an interrupted run can be resumed.
-- `init_db.py` reads the same `.env` and can be run again: rows already in the database are skipped.
+- `meteo.py` accepts a list of departments, e.g. `python data/meteo.py 22 29 35 56`; without arguments, all departments are downloaded. Downloads are saved per department, so an interrupted run can be resumed. For a quick test, one department is enough.
+- `init_db.py` can be run again: rows already in the database are skipped.
 - The generated Parquet files (several GB) are stored in `data/raw_data/`, which is not versioned.
-- `data_visualisation.py` prints a short summary of each Parquet file.
+- `python data/data_visualisation.py` prints a short summary of each Parquet file.
 
-## Running the API
-
-```bash
-cd api/src
-python main.py
-```
-
-The interactive documentation (Swagger) is available at http://localhost:5001/docs. `GET /health` checks that the API is running.
-
-Routes under `/user/zones` require a token: call `POST /user/login`, then send `Authorization: Bearer <token>`. Tokens are valid for 24 hours. Passwords must be 8 characters to 72 bytes long.
-
-Example:
+## Tests and code quality
 
 ```bash
-curl -X POST "http://localhost:5001/dju/point?format=json" \
-  -H "Content-Type: application/json" \
-  -d '{"latitude": 48.11, "longitude": -1.68, "start_date": "2024-01-01",
-       "end_date": "2024-12-31", "heating_threshold": 18, "time_step": "month"}'
+pytest data/test_data.py       # 25 tests on the data scripts, from the root of the repository
+cd api && python -m pytest     # 120 tests on the API (details in api/README.md)
 ```
 
-## Tests
+No test needs a database or a network connection: the data are built by hand, and the database is replaced by fake objects.
+
+The code is checked and formatted with [Ruff](https://docs.astral.sh/ruff/). The settings are in `api/pyproject.toml`, and `data/ruff.toml` reuses them. From the root of the repository:
 
 ```bash
-cd api && python -m pytest     # API, services and business objects
-pytest data/test_data.py       # data scripts, from the root of the repository
+ruff check api data      # lint (add --fix to fix what can be fixed automatically)
+ruff format api data     # format
 ```
-
-None of these tests need a database or a network connection: the DAOs and services are replaced by fake objects.
 
 ## Documentation
 
-- [doc/reports/final_report/](doc/reports/final_report/): final report (`main.qmd`, `main.pdf`) and its diagrams;
-- [doc/reports/interim_report/](doc/reports/interim_report/): interim report;
+- [api/README.md](api/README.md): routes, use and architecture of the API;
+- [doc/reports/final_report/](doc/reports/final_report/): final report (`main.qmd`, `main.pdf`). The diagrams are written in Mermaid in `resources/mermaid/` and turned into PNG with `python resources/render_diagrams.py` (needs Chrome and Pillow);
+- [doc/reports/interim_report/](doc/reports/interim_report/): interim report and the annotated analysis report;
 - [doc/tracking/](doc/tracking/): weekly progress notes.
+
+The reports are rendered with `quarto render main.qmd` (XeLaTeX).
 
 ## Technologies
 
-Python 3.13, FastAPI, Uvicorn, Pydantic, PostgreSQL (psycopg2), pandas, NumPy, PyArrow, bcrypt, PyJWT, pytest, Ruff.
+Python 3.13, FastAPI, Uvicorn, Pydantic, PostgreSQL (psycopg2), pandas, NumPy, PyArrow, requests, bcrypt, PyJWT, pytest, Ruff.
 
 ## Team 12
 

@@ -6,9 +6,10 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from controllers import dju_controller, user_controller, zone_controller
+from dao.db_connection import DBConnection
 
 # .env à la racine du dépôt (api/src/main.py -> ../../.env)
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -32,10 +33,23 @@ def redirect_to_docs():
     return RedirectResponse(url="/docs")
 
 
+def database_is_reachable() -> bool:
+    """Vrai si la base PostgreSQL répond à une requête simple."""
+    try:
+        with DBConnection().connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+        return True
+    except Exception:  # base arrêtée, identifiants faux, .env incomplet...
+        return False
+
+
 @app.get("/health", tags=["Misc"])
 def health_check():
-    """Check que l'API tourne."""
-    return {"status": "ok"}
+    """Vérifie que l'API tourne et que la base répond ; 503 si la base est injoignable."""
+    if not database_is_reachable():
+        return JSONResponse(status_code=503, content={"status": "error", "database": "unreachable"})
+    return {"status": "ok", "database": "ok"}
 
 
 if __name__ == "__main__":

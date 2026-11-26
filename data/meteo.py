@@ -128,6 +128,7 @@ def consolider_et_exporter(morceaux: list[pd.DataFrame]) -> None:
 
 
 def main() -> None:
+    """Télécharge les relevés des départements passés en argument (tous par défaut)."""
     departements = sys.argv[1:] or DEPARTEMENTS
     DOSSIER_DESTINATION.mkdir(exist_ok=True)
     consolider_et_exporter(collecter_donnees_meteo(departements))

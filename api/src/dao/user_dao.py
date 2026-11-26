@@ -1,3 +1,5 @@
+"""DAO des comptes utilisateurs."""
+
 import psycopg2
 
 from business_object.user import User
@@ -41,8 +43,7 @@ class UserDao(metaclass=Singleton):
             with DBConnection().connection as connection:
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "INSERT INTO users (username, password) VALUES (%s, %s) "
-                        "RETURNING id",
+                        "INSERT INTO users (username, password) VALUES (%s, %s) RETURNING id",
                         (user.username, user.password_hash),
                     )
                     res = cursor.fetchone()
@@ -58,4 +59,6 @@ class UserDao(metaclass=Singleton):
     @staticmethod
     def _to_user(row: dict) -> User:
         """Transforme une ligne en User."""
-        return User.from_storage(user_id=row["id"], username=row["username"], password_hash=row["password"])
+        return User.from_storage(
+            user_id=row["id"], username=row["username"], password_hash=row["password"]
+        )

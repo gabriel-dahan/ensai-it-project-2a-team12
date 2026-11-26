@@ -28,6 +28,7 @@ Enfin, une valeur comblée qui donne TMIN > TMAX est retirée.
 
 Chaque valeur est accompagnée d'une colonne SOURCE_* indiquant son origine.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -479,7 +480,9 @@ def main() -> None:
     df_brut = df_brut.drop(columns=["TMEAN", "TMED_TN_TX"], errors="ignore")
     df_brut = df_brut.dropna(subset=COLONNES_A_COMBLER, how="all")
 
-    stations = df_brut.drop_duplicates("NUM_POSTE")[["NUM_POSTE", "LAT", "LON"]].reset_index(drop=True)
+    stations = df_brut.drop_duplicates("NUM_POSTE")[["NUM_POSTE", "LAT", "LON"]].reset_index(
+        drop=True
+    )
     stations["DEPT"] = stations["NUM_POSTE"].map(_code_departement)
 
     morceaux = []
@@ -490,7 +493,9 @@ def main() -> None:
         # Les jours sans aucune température (trous rejetés) ne servent pas en base
         df = df[df["TMIN"].notna() | df["TMAX"].notna()]
         morceaux.append(df.drop(columns=[f"LONGUEUR_TROU_{c}" for c in COLONNES_A_COMBLER]))
-        print(f"[{i}/{stations['DEPT'].nunique()}] Département {dept} : {len(morceaux[-1]):,} lignes")
+        print(
+            f"[{i}/{stations['DEPT'].nunique()}] Département {dept} : {len(morceaux[-1]):,} lignes"
+        )
 
     del df_brut  # libère la mémoire avant l'assemblage
     df = pd.concat(morceaux, ignore_index=True)

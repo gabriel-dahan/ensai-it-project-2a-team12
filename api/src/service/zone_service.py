@@ -17,6 +17,7 @@ class ZoneService:
     """Lecture des territoires et gestion des zonages des utilisateurs."""
 
     def __init__(self, zone_dao=None, zoning_dao=None, dju_dao=None):
+        """Les DAO peuvent être remplacées par des objets factices dans les tests."""
         self.zone_dao = zone_dao or GeoZoneDao()
         self.zoning_dao = zoning_dao or ZoningDao()
         self.dju_dao = dju_dao or DjuDao()
@@ -45,7 +46,9 @@ class ZoneService:
         if zone_type == "region":
             zone = self.zone_dao.get_region_by_insee(zone_code.zfill(2), with_municipalities=True)
         elif zone_type == "department":
-            zone = self.zone_dao.get_department_by_insee(zone_code.zfill(2), with_municipalities=True)
+            zone = self.zone_dao.get_department_by_insee(
+                zone_code.zfill(2), with_municipalities=True
+            )
         elif zone_type == "zoning":
             if not zone_code.isdigit():
                 raise ServiceError("L'identifiant d'un zonage est un nombre entier.", 400)
@@ -67,10 +70,14 @@ class ZoneService:
                 return zone.departments
             if zone.zone_type == "department":
                 return [zone]
-            raise ServiceError("Un zonage personnalisé ne peut pas être découpé par département.", 400)
+            raise ServiceError(
+                "Un zonage personnalisé ne peut pas être découpé par département.", 400
+            )
         raise ServiceError(f"Niveau d'agrégation inconnu : {aggregation_level}.", 400)
 
-    def create_zoning(self, user: User, name: str, description: str | None, codes_insee: list[str]) -> Zoning:
+    def create_zoning(
+        self, user: User, name: str, description: str | None, codes_insee: list[str]
+    ) -> Zoning:
         """Crée un zonage à partir de codes INSEE ; 400 si un code est inconnu."""
         codes = self._clean_codes(codes_insee)
         if not codes:
@@ -83,7 +90,12 @@ class ZoneService:
         return self.zoning_dao.create(zoning)
 
     def import_zoning(
-        self, user: User, filename: str, content: str, description: str | None = None, name: str | None = None
+        self,
+        user: User,
+        filename: str,
+        content: str,
+        description: str | None = None,
+        name: str | None = None,
     ) -> Zoning:
         """Crée un zonage à partir du texte d'un fichier CSV ou JSON."""
         base_name, extension = os.path.splitext(os.path.basename(filename))

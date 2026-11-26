@@ -7,6 +7,8 @@ from .geo_zone import haversine_km
 
 @dataclass
 class MeteoStation:
+    """Station météo, repérée par ses coordonnées et son altitude."""
+
     id: int | None
     station_code: str
     name: str | None
